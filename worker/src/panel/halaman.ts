@@ -185,7 +185,6 @@ export const HALAMAN = String.raw`<!doctype html>
 <script>
 const $ = (id) => document.getElementById(id);
 let logAktif = "worker";
-let sibuk = false;
 
 function titik(kelas, teks) {
   return '<span class="titik ' + kelas + '"></span>' + teks;
@@ -309,21 +308,40 @@ async function segarkan() {
 
 // --- tindakan ------------------------------------------------------------
 async function tindakan(jalur, badan, tombol) {
-  if (sibuk) return;
-  sibuk = true;
+  // Hanya tombol yang ditekan yang dikunci, bukan seluruh panel.
+  //
+  // Sebelumnya ada satu penanda sibuk global. Satu permintaan lambat -
+  // menyalakan ulang sesi WhatsApp bisa belasan detik - mengunci SEMUA
+  // tombol, termasuk yang dibutuhkan untuk keluar dari keadaan itu. Panel
+  // yang membeku persis saat sesuatu bermasalah adalah kebalikan dari
+  // gunanya panel.
+  if (tombol && tombol.disabled) return;
+
   const teksAsli = tombol ? tombol.textContent : null;
   if (tombol) { tombol.disabled = true; tombol.textContent = "menunggu..."; }
+
+  // Batas waktu di sisi klien. Tanpa ini tombol bisa tertinggal dalam
+  // keadaan "menunggu..." selamanya bila engine tidak pernah menjawab.
+  const batal = new AbortController();
+  const jam = setTimeout(() => batal.abort(), 45000);
+
   try {
-    const hasil = await ambil(jalur, {
+    const res = await fetch(jalur, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(badan || {}),
+      signal: batal.signal,
     });
-    return hasil;
+    return await res.json();
   } catch (e) {
-    return { ok: false, pesan: "Panel tidak menjawab: " + e.message };
+    return {
+      ok: false,
+      pesan: e.name === "AbortError"
+        ? "Engine tidak menjawab dalam 45 detik. Coba nyalakan ulang kontainer engine."
+        : "Panel tidak menjawab: " + e.message,
+    };
   } finally {
-    sibuk = false;
+    clearTimeout(jam);
     if (tombol) { tombol.disabled = false; tombol.textContent = teksAsli; }
     segarkan();
   }
@@ -420,6 +438,17 @@ $("btn-pairing").onclick = async (e) => {
 };
 
 $("btn-qr").onclick = async (e) => {
+  // Sesi yang sudah tersambung tidak punya QR - engine akan menolak, dan
+  // permintaannya lambat. Ditahan di sini supaya tidak tampak menggantung.
+  try {
+    const d = await ambil("/api/status");
+    if (d.wa && d.wa.status === "WORKING") {
+      tampilHasil('<div class="peringatan">Nomor sudah tersambung. ' +
+        'Putuskan tautan dulu kalau memang mau menautkan nomor lain.</div>');
+      return;
+    }
+  } catch { /* biarkan lanjut - kalau status tak terbaca, coba saja */ }
+
   hentikanPengawas();
   tampilHasil('<div class="catatan">Meminta QR ke engine...</div>');
   const h = await tindakan("/api/wa/qr", {}, e.target);

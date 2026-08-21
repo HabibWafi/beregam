@@ -7,6 +7,12 @@
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
+
+    // Build yang gagal TIDAK BOLEH menghasilkan dist setengah jadi.
+    // Tanpa ini, satu galat sintaks tetap menulis berkas keluaran,
+    // layanan yang di-restart sesudahnya memuat versi rusak, dan
+    // panel mati tanpa ada yang menghubungkannya dengan build tadi.
+    "noEmitOnError": true,
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
