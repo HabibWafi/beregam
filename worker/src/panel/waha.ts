@@ -139,22 +139,30 @@ export async function versiEngine(): Promise<{ versi: string; engine: string } |
  */
 export async function pastikanSesiJalan(): Promise<HasilWaha> {
   const nama = konfig.WAHA_SESSION;
+  const jalur = `/api/sessions/${encodeURIComponent(nama)}`;
   const sekarang = await statusSesi();
 
   if (!sekarang.ada) {
-    const buat = await panggil(`/api/sessions`, {
-      method: "POST",
-      body: { name: nama, start: true },
-    });
-    if (!buat.ok) return buat;
-  } else if (sekarang.status !== "WORKING" && sekarang.status !== "SCAN_QR_CODE") {
-    const mulai = await panggil(`/api/sessions/${encodeURIComponent(nama)}/start`, {
-      method: "POST",
-    });
-    if (!mulai.ok) return mulai;
+    return panggil(`/api/sessions`, { method: "POST", body: { name: nama, start: true } });
   }
 
-  return { ok: true, status: 200, data: null };
+  if (sekarang.status === "WORKING" || sekarang.status === "SCAN_QR_CODE") {
+    return { ok: true, status: 200, data: null };
+  }
+
+  // FAILED tidak bisa dipulihkan dengan /start saja.
+  //
+  // Engine sampai ke keadaan itu setelah memaksa berhenti - biasanya karena
+  // kode penautan kedaluwarsa sebelum sempat dimasukkan di HP. Memanggil
+  // /start di atas sesi yang sudah FAILED hanya menghasilkan FAILED lagi,
+  // dan dari luar tampak seperti "tombolnya tidak berfungsi". Harus
+  // dihentikan dulu supaya keadaannya bersih.
+  if (sekarang.status === "FAILED") {
+    await panggil(`${jalur}/stop`, { method: "POST" });
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+
+  return panggil(`${jalur}/start`, { method: "POST" });
 }
 
 export async function hentikanSesi(): Promise<HasilWaha> {

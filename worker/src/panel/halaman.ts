@@ -247,7 +247,17 @@ async function segarkan() {
   } else {
     $("wa-status").innerHTML = titik("warn", w.status || "Tidak diketahui");
   }
-  $("wa-nomor").textContent = w.nomor ? "+" + w.nomor + (w.namaAkun ? " (" + w.namaAkun + ")" : "") : "-";
+  // Nomor hanya disebut "tertaut" kalau sesinya benar-benar WORKING.
+  // Engine menyimpan sisa data percobaan sebelumnya di field me, jadi tanpa
+  // syarat ini panel menampilkan nomor tertaut di sebelah status "Gagal" -
+  // dan orang menyimpulkan penautannya berhasil padahal tidak.
+  if (w.status === "WORKING" && w.nomor) {
+    $("wa-nomor").textContent = "+" + w.nomor + (w.namaAkun && w.namaAkun !== "~" ? " (" + w.namaAkun + ")" : "");
+  } else if (w.nomor) {
+    $("wa-nomor").textContent = "belum - percobaan terakhir +" + w.nomor;
+  } else {
+    $("wa-nomor").textContent = "-";
+  }
   $("wa-engine").textContent = d.engine ? d.engine.engine + " " + d.engine.versi : "-";
 
   // Worker
@@ -321,42 +331,113 @@ async function tindakan(jalur, badan, tombol) {
 
 function tampilHasil(html) { $("wa-hasil").innerHTML = html; }
 
+// --- penautan ------------------------------------------------------------
+//
+// Kode penautan hanya berlaku sekitar satu menit. Kegagalan yang paling
+// sering bukan salah konfigurasi, melainkan kehabisan waktu: kode diminta
+// lebih dulu, HP baru dicari sesudahnya. Karena itu alurnya dibalik -
+// siapkan HP dulu, baru minta kode - dan sisa waktunya ditampilkan.
+
+let pengawas = null;
+
+function hentikanPengawas() {
+  if (pengawas) { clearInterval(pengawas); pengawas = null; }
+}
+
+/**
+ * Memantau sampai sesi benar-benar tersambung, atau waktunya habis.
+ * Tanpa ini pemakai harus menebak sendiri apakah kodenya sudah masuk.
+ */
+function awasiPenautan(detik, isiUtama) {
+  hentikanPengawas();
+  let sisa = detik;
+
+  const gambar = () => {
+    $("wa-hasil").innerHTML =
+      isiUtama +
+      '<div class="peringatan" id="hitung">Menunggu kode dimasukkan di HP - sisa <b>' +
+      sisa + ' detik</b></div>';
+  };
+  gambar();
+
+  pengawas = setInterval(async () => {
+    sisa -= 2;
+
+    let d;
+    try { d = await ambil("/api/status"); } catch { return; }
+
+    if (d.wa && d.wa.status === "WORKING") {
+      hentikanPengawas();
+      $("wa-hasil").innerHTML =
+        '<div class="peringatan"><b>Tersambung.</b> Nomor ' +
+        (d.wa.nomor ? "+" + d.wa.nomor : "") +
+        ' sudah tertaut ke PC ini.</div>';
+      segarkan();
+      return;
+    }
+
+    if (sisa <= 0) {
+      hentikanPengawas();
+      $("wa-hasil").innerHTML =
+        '<div class="peringatan galat"><b>Waktu habis.</b> Kode tidak sempat dimasukkan, ' +
+        'jadi engine menghentikan sesinya.<br><br>' +
+        'Siapkan HP sampai layar <b>Tautkan dengan nomor telepon</b> terbuka lebih dulu, ' +
+        'baru tekan tombolnya lagi.</div>';
+      segarkan();
+      return;
+    }
+
+    gambar();
+  }, 2000);
+}
+
 $("btn-pairing").onclick = async (e) => {
+  const siap = confirm(
+    "SIAPKAN HP DULU\n\n" +
+    "Kode hanya berlaku sekitar satu menit, jadi HP harus sudah siap sebelum kode diminta.\n\n" +
+    "Di HP, buka sampai layar ini:\n" +
+    "  WhatsApp Business -> Perangkat Tertaut -> Tautkan Perangkat\n" +
+    "  -> Tautkan dengan nomor telepon\n\n" +
+    "Tekan OK kalau layar itu sudah terbuka."
+  );
+  if (!siap) return;
+
   const nomor = prompt(
     "Nomor WhatsApp yang akan ditautkan.\n\nTulis lengkap dengan kode negara, tanpa tanda apa pun.\nContoh: 6285169881015",
     "6285169881015"
   );
   if (!nomor) return;
+
+  hentikanPengawas();
   tampilHasil('<div class="catatan">Meminta kode ke engine...</div>');
   const h = await tindakan("/api/wa/pairing", { nomor }, e.target);
+
   if (h && h.ok) {
-    tampilHasil(
-      '<div class="kode">' + h.kode + '</div>' +
-      '<div class="catatan">Di HP: <b>WhatsApp -> Perangkat Tertaut -> Tautkan Perangkat -> ' +
-      'Tautkan dengan nomor telepon</b>, lalu masukkan kode di atas. ' +
-      'Kode berlaku sekitar satu menit.</div>'
-    );
+    awasiPenautan(75, '<div class="kode">' + h.kode + '</div>');
   } else {
     tampilHasil('<div class="peringatan galat">' + ((h && h.pesan) || "Gagal meminta kode.") + '</div>');
   }
 };
 
 $("btn-qr").onclick = async (e) => {
+  hentikanPengawas();
   tampilHasil('<div class="catatan">Meminta QR ke engine...</div>');
   const h = await tindakan("/api/wa/qr", {}, e.target);
+
   if (h && h.ok) {
-    tampilHasil(
+    awasiPenautan(
+      75,
       '<img class="qr" alt="Kode QR untuk menautkan WhatsApp" src="' + h.dataUrl + '">' +
       '<div class="catatan">Di HP: <b>WhatsApp -> Perangkat Tertaut -> Tautkan Perangkat</b>, ' +
-      'lalu pindai kode di atas. QR berganti tiap 20 detik - tekan tombolnya lagi kalau kedaluwarsa.</div>'
+      'lalu pindai kode di atas.</div>'
     );
   } else {
     tampilHasil('<div class="peringatan galat">' + ((h && h.pesan) || "QR belum tersedia.") + '</div>');
   }
 };
 
-$("btn-sesi-mulai").onclick = (e) => tindakan("/api/wa/mulai", {}, e.target);
-$("btn-sesi-henti").onclick = (e) => tindakan("/api/wa/henti", {}, e.target);
+$("btn-sesi-mulai").onclick = (e) => { hentikanPengawas(); return tindakan("/api/wa/mulai", {}, e.target); };
+$("btn-sesi-henti").onclick = (e) => { hentikanPengawas(); return tindakan("/api/wa/henti", {}, e.target); };
 
 $("btn-putus").onclick = async (e) => {
   const jawab = prompt(
@@ -366,6 +447,7 @@ $("btn-putus").onclick = async (e) => {
     "Ketik PUTUS untuk melanjutkan."
   );
   if (jawab !== "PUTUS") return;
+  hentikanPengawas();
   const h = await tindakan("/api/wa/putus", { penegasan: "PUTUS" }, e.target);
   tampilHasil(
     h && h.ok
