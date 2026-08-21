@@ -158,8 +158,10 @@ openssl rand -hex 32
 
 | Variabel | Isi dengan |
 |---|---|
-| `OPENWA_IMAGE` | Nama image dan **versi spesifik**, jangan `latest` |
-| `OPENWA_API_KEY` | Hasil `openssl rand -hex 32` |
+| `WAHA_IMAGE` | Tag **versi spesifik**, mis. `devlikeapro/waha:noweb-2026.8.1`. Jangan `latest` |
+| `WAHA_PORT` | `3001` |
+| `WAHA_API_KEY` | Hasil `openssl rand -hex 32` |
+| `WAHA_DASHBOARD_PASSWORD` | Hasil `openssl rand -hex 16` |
 | `PESTA_BASE_URL` | Awali dengan **staging**, jangan langsung produksi |
 | `BEREGAM_WEBHOOK_HMAC` | Hasil `openssl rand -hex 32` |
 
@@ -167,8 +169,9 @@ openssl rand -hex 32
 > di Hostinger. Kalau berbeda, PESTA akan menolak setiap webhook dengan 401
 > dan bot terlihat seperti "tidak menerima pesan sama sekali".
 
-`OPENWA_IMAGE` sengaja dikosongkan di contoh - alasannya ada di
-`.env.example`. Isi dari dokumentasi resmi OpenWA.
+Varian image `noweb-*` memakai baileys tanpa Chromium. Varian `chrome-*`
+menjalankan Chromium dan memakan 300-500 MB RAM lebih banyak tanpa manfaat
+di sini - RAM itu nanti dibutuhkan AI worker pada Fase 2.
 
 ---
 
@@ -183,11 +186,11 @@ Periksa:
 
 ```bash
 docker compose -f ~/beregam/infra/docker-compose.yml ps
-curl -s http://127.0.0.1:2785/health
+curl -s -H "X-Api-Key: <isi-WAHA_API_KEY>" http://127.0.0.1:3001/health
 ```
 
 **Pastikan tidak bisa diakses dari luar PC.** Dari komputer lain di jaringan
-kantor, coba buka `http://<ip-pc>:2785` - harus **gagal terhubung**. Kalau
+kantor, coba buka `http://<ip-pc>:3001` - harus **gagal terhubung**. Kalau
 bisa dibuka, portnya salah bind dan siapa pun di kantor dapat mengirim
 WhatsApp atas nama BPS. Periksa lagi baris `ports:` di `docker-compose.yml`.
 
@@ -201,11 +204,24 @@ Alasannya bukan soal selera: SOP ini akan dijalankan rekan kerja saat Anda
 cuti. Memasukkan 8 karakter di HP jauh lebih mudah daripada memindai QR dari
 layar terminal server.
 
-1. Minta pairing code lewat API OpenWA (lihat dokumentasinya)
+1. Buat sesi lalu minta pairing code lewat API WAHA:
+
+   ```bash
+   API=http://127.0.0.1:3001
+   K="X-Api-Key: <isi WAHA_API_KEY>"
+
+   curl -s -X POST "$API/api/sessions" -H "$K" -H 'Content-Type: application/json'      -d '{"name":"default","start":true}'
+
+   curl -s -X POST "$API/api/default/auth/request-code" -H "$K"      -H 'Content-Type: application/json' -d '{"phoneNumber":"6285169881015"}'
+   ```
 2. Di HP pemegang SIM: **WhatsApp Business → Perangkat Tertaut →
    Tautkan perangkat → Tautkan dengan nomor telepon**
 3. Masukkan kodenya
-4. Pastikan status sesi menjadi aktif
+4. Pastikan status sesi menjadi `WORKING`:
+
+   ```bash
+   curl -s "$API/api/sessions/default" -H "$K"
+   ```
 
 > Engine menyambung sebagai **perangkat tertaut**, bukan sebagai pemilik
 > utama. Jadi saat PC mati, HP tetap menerima semua pesan warga seperti
@@ -249,8 +265,8 @@ Dalam **5 menit**, tanpa disentuh siapa pun, harus terpenuhi:
 
 - [ ] PC menyala sendiri
 - [ ] Windows login sendiri
-- [ ] `docker ps` menampilkan container `beregam-openwa` berstatus healthy
-- [ ] `curl -s http://127.0.0.1:2785/health` menjawab
+- [ ] `docker ps` menampilkan container `beregam-waha` berstatus healthy
+- [ ] `curl -s -H "X-Api-Key: <isi-WAHA_API_KEY>" http://127.0.0.1:3001/health` menjawab
 - [ ] Sesi WhatsApp aktif kembali tanpa perlu tautkan ulang
 
 Catat waktu sebenarnya di runbook.
@@ -278,7 +294,7 @@ mundur - BIOS (langkah 1), auto-login (langkah 2), Task Scheduler (langkah 8).
 
 ## Yang sengaja TIDAK di-backup
 
-**Kredensial sesi WhatsApp** di `infra/data/openwa/`.
+**Kredensial sesi WhatsApp** di `infra/data/waha/`.
 
 Berkas itu setara kunci untuk menyamar sebagai WhatsApp resmi BPS.
 Menyalinnya ke drive cadangan atau cloud menciptakan liabilitas keamanan

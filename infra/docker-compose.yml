@@ -27,6 +27,16 @@ services:
     container_name: beregam-waha
     restart: unless-stopped
 
+    extra_hosts:
+      # host.docker.internal adalah fitur bawaan Docker Desktop, TIDAK ada
+      # di Docker Engine Linux. Tanpa pemetaan ini, webhook yang diarahkan
+      # ke host akan gagal resolve dan kegagalannya hanya terlihat sebagai
+      # "pesan tidak pernah sampai ke PESTA".
+      #
+      # Di produksi PESTA_BASE_URL berupa URL publik, jadi baris ini hanya
+      # berguna saat menguji dengan PESTA yang berjalan di mesin yang sama.
+      - "host.docker.internal:host-gateway"
+
     ports:
       # WAJIB terikat ke 127.0.0.1, JANGAN 0.0.0.0.
       #
@@ -103,9 +113,13 @@ services:
       # endpoint WAHA termasuk /health menolak permintaan tanpa kunci -
       # healthcheck tanpa kunci akan selamanya melaporkan unhealthy padahal
       # engine-nya baik-baik saja.
+      # curl, BUKAN wget: image WAHA tidak memuat wget sama sekali, sehingga
+      # healthcheck berbasis wget selalu gagal dengan "not found" dan
+      # container dilaporkan unhealthy padahal engine-nya sehat.
+      #
       # Dikutip tunggal: tanpa itu YAML membaca "X-Api-Key: " sebagai
       # pasangan kunci-nilai dan menolak seluruh berkas.
-      test: ["CMD-SHELL", 'wget -q --spider --header="X-Api-Key: ${WAHA_API_KEY}" http://localhost:3000/health || exit 1']
+      test: ["CMD-SHELL", 'curl -fsS -m 5 -H "X-Api-Key: ${WAHA_API_KEY}" http://localhost:3000/health > /dev/null || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3

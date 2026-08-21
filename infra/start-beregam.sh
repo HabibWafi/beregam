@@ -34,7 +34,7 @@ fi
 
 # Periksa nilai yang wajib terisi. Gagal di sini jauh lebih baik daripada
 # container hidup dengan konfigurasi setengah jadi.
-for kunci in OPENWA_IMAGE OPENWA_API_KEY PESTA_BASE_URL BEREGAM_WEBHOOK_HMAC; do
+for kunci in WAHA_IMAGE WAHA_API_KEY PESTA_BASE_URL BEREGAM_WEBHOOK_HMAC; do
   nilai="$(grep -E "^${kunci}=" "${DIR_INFRA}/.env" | cut -d= -f2- | tr -d '"' | xargs || true)"
   if [ -z "$nilai" ]; then
     catat "GAGAL: ${kunci} belum diisi di .env"
@@ -42,8 +42,11 @@ for kunci in OPENWA_IMAGE OPENWA_API_KEY PESTA_BASE_URL BEREGAM_WEBHOOK_HMAC; do
   fi
 done
 
+# Muat .env agar kunci API tersedia untuk memeriksa kesiapan engine.
+set -a; . "${DIR_INFRA}/.env"; set +a
+
 # --- 2. Engine WhatsApp ------------------------------------------------------
-catat "Menjalankan engine OpenWA..."
+catat "Menjalankan engine WAHA..."
 cd "$DIR_INFRA" || exit 1
 docker compose up -d >>"$LOG" 2>&1
 
@@ -51,7 +54,7 @@ docker compose up -d >>"$LOG" 2>&1
 catat "Menunggu engine siap (maksimal 3 menit)..."
 siap=0
 for _ in $(seq 1 36); do
-  if curl -fsS --max-time 5 http://127.0.0.1:2785/health >/dev/null 2>&1; then
+  if curl -fsS --max-time 5 -H "X-Api-Key: ${WAHA_API_KEY}" "http://127.0.0.1:${WAHA_PORT:-3001}/health" >/dev/null 2>&1; then
     siap=1
     break
   fi
@@ -59,7 +62,7 @@ for _ in $(seq 1 36); do
 done
 
 if [ "$siap" -eq 1 ]; then
-  catat "Engine siap di 127.0.0.1:2785"
+  catat "Engine siap di 127.0.0.1:${WAHA_PORT:-3001}"
 else
   catat "PERINGATAN: engine belum menjawab setelah 3 menit."
   catat "  Periksa: docker compose logs --tail 50"

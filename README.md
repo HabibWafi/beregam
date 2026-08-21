@@ -87,8 +87,8 @@ pairing code dari HP — sekitar 2 menit.
 | Tahap | Isi | Kondisi |
 |---|---|---|
 | 0 | Repositori disiapkan | Selesai |
-| 8 | Infrastruktur PC: `infra/` | Berkas siap, **menunggu pemasangan di PC** |
-| 9 | Skema & route Beregam di repo `pesta` | Belum |
+| 8 | Infrastruktur PC: `infra/` | **Selesai** - WSL2, Docker, WAHA jalan |
+| 9 | Skema & route Beregam di repo `pesta` | **Selesai** - 14 tabel, 10 route, 33 uji lulus |
 | 10 | Worker pesan (`worker/`) | Belum |
 | 11 | Inbox petugas | Belum |
 | 12 | AI worker (`ai-worker/`) | Belum |
