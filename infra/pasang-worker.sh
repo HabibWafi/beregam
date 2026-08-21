@@ -44,8 +44,9 @@ fi
 
 mkdir -p ~/.config/systemd/user
 cp "${DIR_WORKER}/beregam-worker.service" ~/.config/systemd/user/
+cp "${DIR_WORKER}/beregam-panel.service" ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable beregam-worker >/dev/null 2>&1
+systemctl --user enable beregam-worker beregam-panel >/dev/null 2>&1
 
 # Tanpa linger, layanan pengguna berhenti begitu sesi login terakhir tertutup.
 # Pada PC yang seharusnya melayani 24 jam, itu berarti bot mati diam-diam
@@ -65,12 +66,16 @@ if ! loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q "Linger=yes"; th
   fi
 fi
 
-systemctl --user restart beregam-worker
+systemctl --user restart beregam-worker beregam-panel
 sleep 3
 
 echo ""
 echo "=== Hasil ==="
-systemctl --user is-active beregam-worker | sed 's/^/  status: /'
+echo "  worker : $(systemctl --user is-active beregam-worker)"
+echo "  panel  : $(systemctl --user is-active beregam-panel)"
+echo ""
+echo "Buka panel kendali di browser Windows:"
+echo "  http://localhost:${PANEL_PORT:-3100}"
 echo ""
 echo "Lihat log dengan:"
 echo "  journalctl --user -u beregam-worker -f"

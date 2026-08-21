@@ -196,32 +196,55 @@ WhatsApp atas nama BPS. Periksa lagi baris `ports:` di `docker-compose.yml`.
 
 ---
 
-## 7. Tautkan nomor WhatsApp
+## 7. Panel kendali
+
+Sebelum menautkan nomor, pasang panel kendali - seluruh langkah berikutnya
+jauh lebih mudah lewat panel daripada lewat baris perintah.
+
+```bash
+bash ~/beregam/infra/pasang-worker.sh
+```
+
+Skrip itu memasang dua layanan sekaligus: **worker pesan** dan **panel
+kendali**. Setelah selesai, buka di browser Windows:
+
+**http://localhost:3100**
+
+Panel hanya mendengarkan di `127.0.0.1`. Komputer lain di jaringan kantor
+tidak bisa membukanya, dan itu disengaja - panel bisa memutus tautan
+WhatsApp dan mematikan worker.
+
+Yang bisa dikerjakan dari panel:
+
+| Kebutuhan | Caranya |
+|---|---|
+| Menautkan nomor WhatsApp | Tombol **Tautkan dengan kode** atau **QR** |
+| WhatsApp terputus | Lihat kartu WhatsApp, tautkan ulang dari situ |
+| Bot tidak membalas | Periksa kartu Worker, Engine, dan Sambungan ke PESTA |
+| Pesan menumpuk | Kartu **Antrean pesan** - berapa menunggu, berapa gagal |
+| Melihat sebabnya | Bagian **Log**, worker atau engine |
+| Menyalakan ulang | Tombol di kartu Worker atau Engine |
+
+---
+
+## 8. Tautkan nomor WhatsApp
 
 Pakai **pairing code**, bukan scan QR.
 
-Alasannya bukan soal selera: SOP ini akan dijalankan rekan kerja saat Anda
-cuti. Memasukkan 8 karakter di HP jauh lebih mudah daripada memindai QR dari
-layar terminal server.
+Alasannya bukan soal selera: langkah ini akan dijalankan rekan kerja saat
+Anda cuti. Memasukkan 8 karakter di HP jauh lebih mudah daripada memindai
+QR, dan kodenya bisa didiktekan lewat telepon kalau yang memegang HP sedang
+tidak satu ruangan.
 
-1. Buat sesi lalu minta pairing code lewat API WAHA:
-
-   ```bash
-   API=http://127.0.0.1:3001
-   K="X-Api-Key: <isi WAHA_API_KEY>"
-
-   curl -s -X POST "$API/api/sessions" -H "$K" -H 'Content-Type: application/json'      -d '{"name":"default","start":true}'
-
-   curl -s -X POST "$API/api/default/auth/request-code" -H "$K"      -H 'Content-Type: application/json' -d '{"phoneNumber":"6285169881015"}'
-   ```
-2. Di HP pemegang SIM: **WhatsApp Business → Perangkat Tertaut →
-   Tautkan perangkat → Tautkan dengan nomor telepon**
-3. Masukkan kodenya
-4. Pastikan status sesi menjadi `WORKING`:
-
-   ```bash
-   curl -s "$API/api/sessions/default" -H "$K"
-   ```
+1. Buka **http://localhost:3100**
+2. Tekan **Tautkan dengan kode**
+3. Isi nomornya lengkap dengan kode negara: `6285169881015`
+   (bukan `085169881015` - panel akan menolak dan memberi tahu)
+4. Di HP pemegang SIM: **WhatsApp Business -> Perangkat Tertaut ->
+   Tautkan Perangkat -> Tautkan dengan nomor telepon**
+5. Masukkan kode yang muncul di panel. Berlaku sekitar satu menit
+6. Kartu WhatsApp di panel berubah menjadi **Tersambung**, dengan nomor
+   yang tertaut terlihat di bawahnya
 
 > Engine menyambung sebagai **perangkat tertaut**, bukan sebagai pemilik
 > utama. Jadi saat PC mati, HP tetap menerima semua pesan warga seperti
@@ -231,27 +254,59 @@ layar terminal server.
 satu orang yang bisa menautkan ulang nomor, satu kali cuti panjang berarti
 layanan mati.
 
----
+### Rilis bertahap
 
-## 8. Autostart
+Nomor 6285169881015 sudah punya riwayat dan kontak. Begitu ditautkan, bot
+langsung menerima pesan dari percakapan yang sudah berjalan.
 
-Task Scheduler Windows, **Create Task** (bukan *Basic Task*):
-
-| Bagian | Isi |
-|---|---|
-| General | Nama `Beregam Autostart`. Centang *Run with highest privileges* |
-| Triggers | *At log on*, akun yang dipakai auto-login. Delay 30 detik |
-| Actions | *Start a program* |
-| &nbsp;&nbsp;Program | `wsl.exe` |
-| &nbsp;&nbsp;Arguments | `-d Ubuntu-24.04 -u <user> bash -lc "~/beregam/infra/start-beregam.sh"` |
-| Conditions | **Hilangkan** centang *Start the task only if the computer is on AC power* |
-| Settings | Centang *Run task as soon as possible after a scheduled start is missed* |
-
-Ganti `<user>` dengan nama pengguna Ubuntu Anda.
+Karena itu: tautkan dulu dengan **saklar bot dimatikan** dari halaman admin
+PESTA, amati pesan yang masuk satu sampai dua hari lewat panel, baru
+nyalakan botnya.
 
 ---
 
-## 9. Gerbang kualitas: uji cabut kabel
+## 9. Autostart Windows
+
+Jalankan sekali di PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "D:\Aplikasi dan Website\Beregam\infra\pasang-autostart.ps1"
+```
+
+Yang didaftarkan hanya satu tugas: sebuah proses di dalam WSL yang tidak
+pernah selesai. Kelihatannya sepele, tapi inilah yang membuat sisa rantai
+bekerja.
+
+**WSL2 menghentikan distribusi yang tidak punya proses aktif, lalu
+membongkar mesin virtualnya.** Kontainer Docker dan layanan systemd tidak
+selalu cukup menahannya. Saat WSL dibongkar, engine WhatsApp ikut mati - dan
+sesi WhatsApp yang mati berulang kali tidak akan pernah bertahan cukup lama
+untuk melayani siapa pun. Kegagalan ini sunyi: tidak ada pesan galat, bot
+hanya berhenti membalas.
+
+Efek keduanya: penerusan `localhost` dari Windows ke WSL hanya hidup selama
+distribusinya jalan. Tanpa tugas ini, panel di `localhost:3100` tidak bisa
+dibuka dari browser Windows walaupun panelnya sendiri sehat.
+
+Setelah distribusi tertahan hidup, sisanya menyusul sendiri: Docker
+menyalakan kontainer lewat *restart policy*, systemd menyalakan worker dan
+panel lewat *linger*.
+
+Pasangannya ada di `.wslconfig`:
+
+```ini
+vmIdleTimeout=-1
+```
+
+Dua lapis dipakai untuk hal yang sama karena taruhannya layanan mati diam-diam.
+
+> Jalankan sebagai **Administrator** bila ingin Beregam hidup bahkan sebelum
+> ada yang login. Tanpa hak admin, skrip tetap terpasang tetapi hanya dengan
+> pemicu saat logon - cukup untuk PC yang di-set login otomatis.
+
+---
+
+## 10. Gerbang kualitas: uji cabut kabel
 
 **Jangan lanjut ke tahap berikutnya sebelum uji ini lulus.**
 
@@ -282,7 +337,7 @@ mundur - BIOS (langkah 1), auto-login (langkah 2), Task Scheduler (langkah 8).
 
 ---
 
-## 10. Setelah semuanya jalan
+## 11. Setelah semuanya jalan
 
 - [ ] Simpan `.env` di brankas kredensial (**bukan** di repo)
 - [ ] Catat sandi Ubuntu dan sandi Windows di brankas yang sama

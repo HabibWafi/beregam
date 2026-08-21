@@ -1,0 +1,22 @@
+[Unit]
+Description=Beregam - panel kendali lokal
+Documentation=https://github.com/HabibWafi/beregam
+# Panel sengaja TIDAK memakai Requires= pada worker. Ia justru paling
+# dibutuhkan ketika worker sedang mati - kalau ikut berhenti, tidak ada yang
+# bisa dipakai untuk menyalakannya kembali selain baris perintah.
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/beregam/worker
+EnvironmentFile=%h/beregam/worker/.env
+ExecStart=/usr/bin/node dist/panel/index.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=beregam-panel
+
+[Install]
+WantedBy=default.target

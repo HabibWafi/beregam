@@ -26,6 +26,18 @@ processors=8
 
 swap=2GB
 
+# Jangan pernah membongkar VM karena dianggap menganggur.
+#
+# INI YANG MEMBUAT BOT BISA HIDUP 24 JAM. Bawaan WSL2 mematikan VM sekitar
+# satu menit setelah sesi klien terakhir tertutup. Layanan systemd dan
+# kontainer Docker TIDAK dihitung sebagai sesi - jadi tanpa baris ini,
+# WAHA dan worker ikut mati bersama VM-nya, berulang kali, dan sesi
+# WhatsApp tidak pernah bertahan cukup lama untuk melayani siapa pun.
+#
+# -1 berarti tidak pernah. Butuh WSL 2.x versi baru; PC ini 2.7.12.
+vmIdleTimeout=-1
+
+
 # systemd diperlukan agar worker bisa dijalankan sebagai layanan yang
 # otomatis hidup kembali saat mati.
 #
