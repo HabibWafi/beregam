@@ -84,5 +84,18 @@ pairing code dari HP — sekitar 2 menit.
 
 ## Status
 
-Tahap 0 — repositori disiapkan. Kode worker belum ditulis.
-Lihat rencana kerja di `docs/`.
+| Tahap | Isi | Kondisi |
+|---|---|---|
+| 0 | Repositori disiapkan | Selesai |
+| 8 | Infrastruktur PC: `infra/` | Berkas siap, **menunggu pemasangan di PC** |
+| 9 | Skema & route Beregam di repo `pesta` | Belum |
+| 10 | Worker pesan (`worker/`) | Belum |
+| 11 | Inbox petugas | Belum |
+| 12 | AI worker (`ai-worker/`) | Belum |
+
+**Langkah berikutnya:** ikuti [`infra/SETUP-PC.md`](infra/SETUP-PC.md)
+berurutan. WSL2 dan Docker belum terpasang di PC ini, dan keduanya butuh
+hak administrator serta restart.
+
+Jangan lewati **langkah 9 - uji cabut kabel listrik**. Itu satu-satunya cara
+membuktikan bot benar-benar pulih sendiri setelah mati lampu.
