@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Kontrak API hasil sinkronisasi dari repo pesta.
+# Sumber kebenarannya ada di sana - berkas ini tidak pernah diedit langsung.
+src/generated/

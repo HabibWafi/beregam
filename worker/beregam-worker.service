@@ -1,0 +1,49 @@
+# =============================================================================
+# Unit systemd untuk worker pesan Beregam.
+#
+# Dipasang sebagai layanan PENGGUNA, bukan sistem, supaya tidak perlu root
+# dan supaya berhenti bersama sesi WSL.
+#
+# Pasang:
+#   mkdir -p ~/.config/systemd/user
+#   cp ~/beregam/worker/beregam-worker.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now beregam-worker
+#
+# Agar tetap jalan walau tidak ada sesi login yang terbuka:
+#   sudo loginctl enable-linger $USER
+#
+# Lihat log:
+#   journalctl --user -u beregam-worker -f
+# =============================================================================
+
+[Unit]
+Description=Beregam - worker pesan WhatsApp BPS Musi Rawas
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/beregam/worker
+EnvironmentFile=%h/beregam/worker/.env
+ExecStart=/usr/bin/node dist/index.js
+
+# Selalu dinyalakan ulang. Worker yang mati diam-diam berarti warga
+# mengirim pesan dan tidak pernah dibalas, tanpa ada yang tahu.
+Restart=always
+RestartSec=10
+
+# Kecuali saat berhenti karena versi kontrak tidak cocok (exit 2). Mencoba
+# ulang tidak akan pernah berhasil, dan restart tanpa henti hanya
+# menenggelamkan pesan galatnya di dalam log.
+RestartPreventExitStatus=2
+
+# Waktu untuk menyelesaikan pesan yang sedang dikirim sebelum dipaksa mati.
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=beregam-worker
+
+[Install]
+WantedBy=default.target
