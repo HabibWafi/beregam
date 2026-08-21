@@ -1,0 +1,37 @@
+# =============================================================================
+# Batas sumber daya WSL2
+#
+# Salin ke:  C:\Users\<nama-pengguna>\.wslconfig
+# Lalu jalankan di PowerShell:  wsl --shutdown
+#
+# TANPA BERKAS INI, WSL2 mengambil sampai separuh RAM mesin dan berebut
+# dengan Windows. Di PC 16 GB itu berarti 8 GB terpakai bahkan saat WSL
+# sedang menganggur.
+# =============================================================================
+
+[wsl2]
+
+# PC ini punya 16 GB. Alokasi yang direncanakan:
+#   Windows + layanan   ~4 GB
+#   WSL2                 8 GB  <- dibatasi di sini
+#     - engine OpenWA      ~400 MB
+#     - worker pesan       ~120 MB
+#     - AI worker (Fase 2) ~1,5 GB
+#   Cadangan            ~4 GB
+memory=8GB
+
+# i7-12700F punya 12 core / 20 thread. Menyisakan sebagian untuk Windows
+# supaya mesin tetap enak dipakai saat bot sedang sibuk.
+processors=8
+
+swap=2GB
+
+# systemd diperlukan agar worker bisa dijalankan sebagai layanan yang
+# otomatis hidup kembali saat mati.
+#
+# Catatan: mulai WSL 0.67.6 systemd diaktifkan lewat /etc/wsl.conf di dalam
+# distribusi, bukan di berkas ini. Lihat SETUP-PC.md langkah 3.
+
+# Matikan localhost forwarding otomatis bila jaringan kantor bermasalah.
+# Biarkan seperti ini kecuali ada gangguan.
+# networkingMode=mirrored

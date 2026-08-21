@@ -1,0 +1,98 @@
+# =============================================================================
+# Engine WhatsApp Beregam - OpenWA
+#
+# Dijalankan di PC kantor, di dalam WSL2. Tidak pernah di Hostinger.
+#
+# Sebelum menjalankan:
+#   1. Salin .env.example menjadi .env, lalu isi semuanya
+#   2. Baca catatan OPENWA_IMAGE di .env.example - versinya WAJIB dikunci
+#   3. docker compose up -d
+# =============================================================================
+
+services:
+  openwa:
+    # Tag versi WAJIB spesifik, JANGAN PERNAH `latest`.
+    #
+    # OpenWA masih pra-1.0 (0.x), dan pada rentang itu perubahan yang merusak
+    # kompatibilitas adalah hal wajar. Dengan `latest`, satu `docker compose
+    # pull` di hari yang salah bisa mematikan layanan WhatsApp BPS tanpa ada
+    # yang mengubah kode apa pun.
+    #
+    # Upgrade dilakukan sadar: baca changelog -> uji di staging -> baru produksi.
+    image: ${OPENWA_IMAGE}
+    container_name: beregam-openwa
+    restart: unless-stopped
+
+    ports:
+      # WAJIB terikat ke 127.0.0.1, JANGAN 0.0.0.0.
+      #
+      # Tanpa awalan 127.0.0.1, port ini terbuka ke seluruh jaringan kantor,
+      # dan siapa pun yang terhubung ke jaringan yang sama bisa mengirim
+      # WhatsApp atas nama BPS Kabupaten Musi Rawas.
+      - "127.0.0.1:2785:2785"
+
+    environment:
+      # --- Engine ---
+      # WAJIB baileys. Nilai bawaan OpenWA adalah whatsapp-web.js yang
+      # menjalankan Chromium - sekitar 300-500 MB RAM untuk pekerjaan yang
+      # sama, dan tidak ada gunanya di sini.
+      ENGINE_TYPE: baileys
+
+      PORT: 2785
+      TZ: Asia/Jakarta
+
+      # --- Keamanan API lokal ---
+      API_KEY: ${OPENWA_API_KEY}
+
+      # --- Webhook ke PESTA ---
+      # Semua koneksi berasal DARI PC KE internet. PC tidak pernah menerima
+      # koneksi masuk, jadi tidak butuh IP publik, port forwarding, atau tunnel.
+      WEBHOOK_URL: ${PESTA_BASE_URL}/api/beregam/webhook
+      WEBHOOK_HMAC_KEY: ${BEREGAM_WEBHOOK_HMAC}
+
+      # Peristiwa yang dilanggan.
+      #
+      # session.restriction penting: itu peringatan dini bahwa WhatsApp mulai
+      # membatasi nomor ini. Dicatat ke beregam_alerts supaya terlihat sebelum
+      # nomornya benar-benar diblokir.
+      WEBHOOK_EVENTS: ${OPENWA_WEBHOOK_EVENTS}
+
+      # --- Penyimpanan ---
+      # SQLite bawaan sudah cukup untuk skala BPS kabupaten. Profil
+      # PostgreSQL/Redis/MinIO sengaja TIDAK diaktifkan - menambah komponen
+      # yang harus dijaga tanpa kebutuhan nyata.
+      DATABASE_TYPE: sqlite
+
+    volumes:
+      # Kredensial sesi WhatsApp.
+      #
+      # Folder ini SENGAJA TIDAK PERNAH DI-BACKUP. Isinya setara kunci untuk
+      # menyamar sebagai WhatsApp resmi BPS. Menyalinnya ke drive cadangan
+      # atau cloud menciptakan liabilitas keamanan yang jauh lebih besar
+      # daripada nilai dua menit yang dihemat.
+      #
+      # Pemulihan bukan restore, melainkan: pasang lalu tautkan ulang lewat
+      # pairing code dari HP. Sekitar dua menit.
+      - ./data/openwa:/app/data
+
+    # Batasi memori supaya engine tidak menggerus jatah AI worker nanti.
+    # WSL2 dibatasi 8 GB lewat .wslconfig; alokasi kasarnya:
+    #   engine ~400 MB + worker pesan ~120 MB + AI worker ~1,5 GB
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:2785/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    logging:
+      # Tanpa batas ini, log setahun bisa memenuhi disk PC diam-diam.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
