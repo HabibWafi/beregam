@@ -50,10 +50,19 @@ systemctl --user enable beregam-worker >/dev/null 2>&1
 # Tanpa linger, layanan pengguna berhenti begitu sesi login terakhir tertutup.
 # Pada PC yang seharusnya melayani 24 jam, itu berarti bot mati diam-diam
 # setiap kali jendela terminal ditutup.
+#
+# `sudo -n` wajib: tanpanya sudo meminta kata sandi dan skrip menggantung
+# selamanya saat dijalankan tanpa terminal - misalnya dari Task Scheduler,
+# tepat pada jalur autostart yang seharusnya dijamin skrip ini.
 if ! loginctl show-user "$USER" -p Linger 2>/dev/null | grep -q "Linger=yes"; then
   echo "  Mengaktifkan linger agar layanan tetap jalan tanpa sesi login..."
-  sudo loginctl enable-linger "$USER" || \
-    echo "  PERINGATAN: gagal. Jalankan manual: sudo loginctl enable-linger $USER"
+  if sudo -n loginctl enable-linger "$USER" 2>/dev/null; then
+    echo "  linger aktif."
+  else
+    echo "  PERINGATAN: butuh hak root. Jalankan sekali secara manual:"
+    echo "      sudo loginctl enable-linger $USER"
+    echo "  Sampai itu dilakukan, worker berhenti saat sesi WSL terakhir tertutup."
+  fi
 fi
 
 systemctl --user restart beregam-worker
