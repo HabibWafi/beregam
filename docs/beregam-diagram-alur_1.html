@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beregam — Diagram Alur Pesan</title>
+<style>
+  :root{
+    --paper:#EBEEF3;
+    --card:#FFFFFF;
+    --ink:#141D2B;
+    --ink-soft:#4E5A6B;
+    --rule:#C9D2DE;
+    --pc:#8A5F0C;
+    --pc-tint:#F4E9D1;
+    --host:#0D585F;
+    --host-tint:#DBECED;
+    --alert:#8F2B2B;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  *{box-sizing:border-box}
+
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .wrap{max-width:960px;margin:0 auto;padding:40px 20px 80px}
+
+  /* ---------- Hero ---------- */
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin:0 0 22px;
+  }
+
+  h1{
+    font-family:var(--mono);
+    font-size:clamp(21px,4.6vw,33px);
+    line-height:1.28;
+    letter-spacing:-.02em;
+    font-weight:600;
+    margin:0 0 18px;
+    max-width:22ch;
+  }
+
+  .lede{
+    font-size:clamp(15px,2.4vw,17px);
+    color:var(--ink-soft);
+    margin:0;
+    max-width:56ch;
+  }
+
+  /* ---------- Zone legend ---------- */
+  .zones{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:34px 0 0;
+    padding:0;
+    list-style:none;
+  }
+  .zones li{
+    font-family:var(--mono);
+    font-size:11.5px;
+    letter-spacing:.06em;
+    padding:9px 13px;
+    border-radius:2px;
+    border:1px solid;
+    display:flex;
+    gap:9px;
+    align-items:baseline;
+  }
+  .z-pc{background:var(--pc-tint);border-color:#DCC99B;color:var(--pc)}
+  .z-host{background:var(--host-tint);border-color:#A8CACD;color:var(--host)}
+  .zones b{font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+  .zones span{color:var(--ink-soft);font-weight:400}
+
+  hr.rule{
+    border:0;
+    border-top:1px solid var(--rule);
+    margin:46px 0;
+  }
+
+  /* ---------- Section ---------- */
+  section{margin:0 0 8px}
+
+  .tag{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--host);
+    display:block;
+    margin:0 0 9px;
+  }
+
+  h2{
+    font-family:var(--mono);
+    font-size:clamp(17px,3vw,21px);
+    font-weight:600;
+    letter-spacing:-.01em;
+    margin:0 0 12px;
+    line-height:1.35;
+  }
+
+  .desc{
+    margin:0 0 20px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    font-size:15.5px;
+  }
+
+  /* ---------- Diagram frame ---------- */
+  .frame{
+    background:var(--card);
+    border:1px solid var(--rule);
+    border-radius:3px;
+  }
+  .frame-head{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    padding:11px 15px;
+    border-bottom:1px solid var(--rule);
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .frame-head .hint{opacity:.75;font-size:10.5px;letter-spacing:.04em;text-transform:none}
+  .scroller{overflow-x:auto;padding:14px 10px 6px}
+  .scroller .mermaid{min-width:min-content}
+
+  /* ---------- Takeaway ---------- */
+  .takeaway{
+    margin:20px 0 0;
+    padding:15px 17px;
+    background:var(--card);
+    border-left:3px solid var(--pc);
+    border-radius:0 3px 3px 0;
+    font-size:15px;
+  }
+  .takeaway strong{font-family:var(--mono);font-size:13.5px;letter-spacing:.02em}
+  .takeaway.warn{border-left-color:var(--alert)}
+
+  /* ---------- Table ---------- */
+  .tbl-scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:3px;background:var(--card)}
+  table{border-collapse:collapse;width:100%;min-width:560px;font-size:14.5px}
+  th,td{padding:12px 15px;text-align:left;border-bottom:1px solid var(--rule);vertical-align:top}
+  th{
+    font-family:var(--mono);
+    font-size:10.5px;
+    letter-spacing:.13em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    font-weight:600;
+    white-space:nowrap;
+  }
+  tbody tr:last-child td{border-bottom:0}
+  td.who{font-family:var(--mono);font-size:13px;white-space:nowrap}
+  td.who.pc{color:var(--pc)}
+  td.who.host{color:var(--host)}
+
+  footer{
+    margin-top:52px;
+    padding-top:22px;
+    border-top:1px solid var(--rule);
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+  }
+
+  /* ---------- Reveal ---------- */
+  .reveal{opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease}
+  .reveal.on{opacity:1;transform:none}
+  @media (prefers-reduced-motion: reduce){
+    .reveal{opacity:1;transform:none;transition:none}
+  }
+
+  @media (max-width:560px){
+    .wrap{padding:30px 14px 60px}
+    hr.rule{margin:38px 0}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Beregam · Arsitektur Pesan · BPS Musi Rawas</p>
+  <h1>Laravel tidak pernah mengirim pesan WhatsApp.</h1>
+  <p class="lede">Ia membaca pesan masuk, memutuskan balasannya, menulis satu baris ke tabel <code>beregam_outbox</code> — lalu proses PHP-nya mati. Yang benar-benar mengirim adalah worker di PC, dan worker itulah yang datang mengambil, bukan sebaliknya.</p>
+
+  <ul class="zones">
+    <li class="z-pc"><b>PC Kantor</b><span>tanpa IP publik · hanya koneksi keluar</span></li>
+    <li class="z-host"><b>Shared Hosting</b><span>publik · tidak bisa menjangkau PC</span></li>
+  </ul>
+
+  <hr class="rule">
+
+  <!-- A -->
+  <section class="reveal">
+    <span class="tag">Skenario A · Kontak baru</span>
+    <h2>Satu pesan "halo" dari warga</h2>
+    <p class="desc">Perhatikan langkah 12. Laravel mengembalikan 200 dan prosesnya selesai — padahal belum ada satu pun pesan yang terkirim ke warga. Yang terjadi cuma beberapa baris masuk ke MySQL.</p>
+    <div class="frame">
+      <div class="frame-head"><span>Alur penuh</span><span class="hint">geser ke samping →</span></div>
+      <div class="scroller">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor W as Warga
+    box rgb(244,233,209) PC KANTOR
+    participant WA as WAHA
+    participant WK as Worker
+    end
+    box rgb(219,236,237) SHARED HOSTING
+    participant L as PESTA Laravel
+    participant DB as MySQL
+    end
+    W->>WA: kirim "halo"
+    WA->>L: POST /api/beregam/webhook
+    activate L
+    L->>L: verifikasi HMAC
+    L->>DB: cari kontak
+    DB-->>L: tidak ditemukan
+    L->>DB: INSERT beregam_contacts
+    L->>DB: INSERT beregam_messages arah in
+    L->>DB: cari session
+    DB-->>L: tidak ada, berarti percakapan baru
+    L->>DB: INSERT beregam_outbox status pending
+    L->>DB: UPSERT session state main_menu
+    L-->>WA: 200 OK
+    deactivate L
+    Note over L,DB: Proses PHP mati di sini.<br/>Belum ada pesan yang terkirim.
+    loop tiap 3 detik
+        WK->>L: GET /api/beregam/outbox
+    end
+    activate L
+    L->>DB: kunci baris, status locked
+    L-->>WK: daftar pesan pending
+    deactivate L
+    WK->>WA: sendSeen lalu startTyping
+    Note over WK,WA: jeda acak 3 sampai 8 detik
+    WK->>WA: sendText
+    WA->>W: "Halo! Saya Beregam..."
+    WK->>L: POST ack status sent
+    L->>DB: UPDATE outbox status sent
+</pre>
+      </div>
+    </div>
+    <p class="takeaway"><strong>Inti A —</strong> arah panah antar zona selalu dari PC ke hosting. Webhook keluar, polling keluar. Tidak ada satu pun koneksi masuk ke PC, jadi tidak perlu IP publik, port forwarding, maupun tunnel.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- B -->
+  <section class="reveal">
+    <span class="tag">Skenario B · Percakapan bertahap</span>
+    <h2>Bagaimana bot "ingat" giliran sebelumnya</h2>
+    <p class="desc">Setiap pesan masuk adalah request HTTP baru yang amnesia total. Yang membuat percakapan terasa nyambung adalah kolom <code>state</code> yang dibaca sebelum menjawab dan ditulis ulang sesudahnya. Pengiriman balasan tetap lewat outbox dan worker — disederhanakan di sini agar alur state-nya terlihat jelas.</p>
+    <div class="frame">
+      <div class="frame-head"><span>Menu 2 · permintaan data</span><span class="hint">geser ke samping →</span></div>
+      <div class="scroller">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor W as Warga
+    participant S as BeregamService
+    participant T as tabel beregam_sessions
+    Note over T: state saat ini main_menu
+    W->>S: "2"
+    S->>T: baca state
+    T-->>S: main_menu
+    S->>T: tulis state data_nama
+    S-->>W: Siapa nama Anda?
+    Note over S: request selesai, PHP mati
+    W->>S: "Budi Santoso"
+    S->>T: baca state
+    T-->>S: data_nama
+    S->>T: simpan context nama, state data_instansi
+    S-->>W: Instansi atau asal Anda?
+    Note over S: request selesai, PHP mati
+    W->>S: "Universitas Sriwijaya"
+    S->>T: baca state
+    T-->>S: data_instansi
+    S->>T: simpan context instansi, state data_kebutuhan
+    S-->>W: Data apa yang dibutuhkan?
+    Note over S: request selesai, PHP mati
+    W->>S: "PDRB Musi Rawas 2024"
+    S->>T: baca state
+    T-->>S: data_kebutuhan
+    S->>T: simpan context kebutuhan, state main_menu
+    S->>S: buat baris beregam_handovers
+    S-->>W: Permintaan tercatat, petugas akan menghubungi
+</pre>
+      </div>
+    </div>
+    <p class="takeaway"><strong>Inti B —</strong> tanpa kolom <code>state</code>, bot tidak akan tahu bahwa "Budi Santoso" itu jawaban atas pertanyaan nama, bukan perintah menu. Ini pola yang sama persis dengan session login di PESTA, cuma kuncinya nomor HP, bukan cookie.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- C -->
+  <section class="reveal">
+    <span class="tag">Skenario C · Gangguan</span>
+    <h2>Saat internet kantor putus</h2>
+    <p class="desc">Ini kondisi yang pasti terjadi, bukan kemungkinan. Yang penting bukan mencegahnya, tapi memastikan sistem pulih sendiri tanpa kehilangan pesan.</p>
+    <div class="frame">
+      <div class="frame-head"><span>Putus lalu pulih</span><span class="hint">geser ke samping →</span></div>
+      <div class="scroller">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor W as Warga
+    participant WS as Server WhatsApp
+    box rgb(244,233,209) PC KANTOR
+    participant WA as WAHA
+    participant WK as Worker
+    end
+    box rgb(219,236,237) SHARED HOSTING
+    participant L as PESTA Laravel
+    end
+    Note over WA,WK: internet kantor putus
+    W->>WS: kirim pesan
+    WS--xWA: tidak tersampaikan
+    Note over WS: pesan ditahan di server WhatsApp
+    WK-xL: GET outbox gagal
+    WK->>WK: backoff 3 detik
+    WK-xL: GET outbox gagal
+    WK->>WK: backoff 6 detik
+    WK-xL: GET outbox gagal
+    WK->>WK: backoff 12 detik, maksimal 60
+    Note over WK: worker tidak crash, hanya melambat
+    Note over WA,WK: internet pulih
+    WS->>WA: kirim semua pesan tertahan
+    WA->>L: POST webhook berurutan
+    L-->>WA: 200 OK
+    WK->>L: GET outbox berhasil
+    L-->>WK: semua balasan tertunda
+    WK->>WA: sendText satu per satu
+    WA->>W: balasan sampai
+</pre>
+      </div>
+    </div>
+    <p class="takeaway"><strong>Inti C —</strong> tidak ada pesan yang hilang. WhatsApp menahan pesan warga selama WAHA offline, dan balasan yang sudah diputuskan Laravel menunggu aman di tabel outbox. Keduanya menyusul sendiri saat koneksi kembali.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- D -->
+  <section class="reveal">
+    <span class="tag">Skenario D · Sesi WhatsApp putus</span>
+    <h2>Bot mati diam-diam — dan bagaimana ketahuan</h2>
+    <p class="desc">Ini kegagalan paling berbahaya karena tidak ada error di mana pun. Semua komponen hidup, tapi WAHA kehilangan sesi dan bot berhenti membalas. Tanpa watchdog, kamu baru tahu dari warga yang komplain besoknya.</p>
+    <div class="frame">
+      <div class="frame-head"><span>Deteksi dan pemulihan</span><span class="hint">geser ke samping →</span></div>
+      <div class="scroller">
+<pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant WK as Worker
+    participant WA as WAHA
+    participant L as PESTA Laravel
+    participant C as Cron watchdog
+    actor A as Petugas
+    loop tiap 60 detik
+        WK->>WA: cek status sesi
+        WA-->>WK: SCAN_QR_CODE
+        WK->>L: heartbeat status SCAN_QR_CODE
+        L->>L: simpan ke beregam_health
+    end
+    loop tiap menit
+        C->>L: jalankan beregam watchdog
+        L->>L: status bukan WORKING
+        L->>A: catat alert dan tandai alerted_at
+    end
+    Note over A: jalankan SOP scan ulang QR
+    A->>WA: scan QR dari HP
+    WA-->>WK: status WORKING
+    WK->>L: heartbeat WORKING
+    L->>L: reset alerted_at, catat recovered
+</pre>
+      </div>
+    </div>
+    <p class="takeaway warn"><strong>Inti D —</strong> alert tidak boleh dikirim lewat WhatsApp. Ironis kalau pemberitahuan "bot mati" dikirim memakai bot yang sedang mati. Pakai catatan di admin panel plus pemantauan luar seperti UptimeRobot.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- Ringkasan -->
+  <section class="reveal">
+    <span class="tag">Ringkasan</span>
+    <h2>Siapa mengerjakan apa</h2>
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr><th>Pekerjaan</th><th>Dikerjakan oleh</th><th>Catatan</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Terhubung ke WhatsApp</td><td class="who pc">WAHA</td><td>Menyimpan sesi, satu-satunya yang bicara ke server WhatsApp</td></tr>
+          <tr><td>Memutuskan isi balasan</td><td class="who host">Laravel</td><td>State machine, bukan AI</td></tr>
+          <tr><td>Menyimpan ingatan percakapan</td><td class="who host">MySQL</td><td>Kolom <code>state</code> dan <code>context</code></td></tr>
+          <tr><td>Mengirim pesan ke warga</td><td class="who pc">Worker</td><td>Laravel tidak pernah melakukan ini</td></tr>
+          <tr><td>Menjembatani dua zona</td><td class="who pc">Worker</td><td>Polling keluar tiap 3 detik</td></tr>
+          <tr><td>Jeda dan indikator mengetik</td><td class="who pc">Worker</td><td>Acak 3–8 detik, penting untuk anti-blokir</td></tr>
+          <tr><td>Mendeteksi bot mati</td><td class="who host">Cron watchdog</td><td>Ambang 5 menit tanpa heartbeat</td></tr>
+          <tr><td>Mengubah jawaban FAQ</td><td class="who host">Admin panel</td><td>Petugas PST, tanpa perlu developer</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>Beregam v1.0 · Dokumen pendamping Rencana Implementasi</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+    themeVariables: {
+      background: '#FFFFFF',
+      primaryColor: '#FFFFFF',
+      primaryTextColor: '#141D2B',
+      primaryBorderColor: '#C9D2DE',
+      lineColor: '#5C6878',
+      textColor: '#141D2B',
+      fontSize: '15px',
+      actorBkg: '#FFFFFF',
+      actorBorder: '#8593A6',
+      actorTextColor: '#141D2B',
+      actorLineColor: '#B7C1CE',
+      signalColor: '#39465A',
+      signalTextColor: '#25324A',
+      labelBoxBkgColor: '#EBEEF3',
+      labelBoxBorderColor: '#C9D2DE',
+      labelTextColor: '#141D2B',
+      loopTextColor: '#4E5A6B',
+      noteBkgColor: '#FBF3DC',
+      noteBorderColor: '#D8C79B',
+      noteTextColor: '#4A3A12',
+      activationBkgColor: '#DBECED',
+      activationBorderColor: '#0D585F',
+      sequenceNumberColor: '#FFFFFF'
+    },
+    sequence: {
+      useMaxWidth: false,
+      diagramMarginX: 18,
+      diagramMarginY: 12,
+      boxMargin: 10,
+      actorMargin: 58,
+      width: 150,
+      height: 48,
+      mirrorActors: false,
+      wrap: true
+    }
+  });
+
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('on'); io.unobserve(e.target);} });
+  }, {threshold: 0.08});
+  document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+</script>
+</body>
+</html>

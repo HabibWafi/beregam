@@ -1,0 +1,54 @@
+# ==========================================================================
+# BEREGAM — berkas yang TIDAK BOLEH masuk repositori
+# ==========================================================================
+
+# --- Rahasia ---
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# --- Kredensial sesi WhatsApp ---
+# SENGAJA tidak di-backup. Berkas ini setara kunci untuk menyamar sebagai
+# WhatsApp resmi BPS. Menyalinnya ke drive cadangan atau cloud menciptakan
+# liabilitas keamanan yang jauh lebih besar daripada nilai 2 menit yang
+# dihemat. Pemulihan = pasang lalu tautkan ulang lewat pairing code.
+infra/data/
+*.session
+sessions/
+tokens/
+
+# --- Indeks vektor AI (Fase 2) ---
+# Dibangun ulang otomatis dari basis pengetahuan lewat endpoint sync.
+ai-worker/index/
+*.npz
+
+# --- Kontrak API hasil sinkronisasi dari repo pesta ---
+# Sumber kebenarannya ada di pesta/src/lib/beregam/contracts.ts.
+# Jalankan: npm run contracts:sync
+worker/src/generated/
+
+# --- Dependency & build ---
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# --- Python ---
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# --- Log ---
+logs/
+*.log
+
+# --- Duplikat plan.docx di root (aslinya ada di docs/) ---
+/plan.docx
+
+# --- OS ---
+Thumbs.db
+desktop.ini
+.DS_Store
