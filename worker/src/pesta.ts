@@ -32,6 +32,8 @@ interface Hasil<T> {
   status: number;
 }
 
+const tidur = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function panggil<T>(
   jalur: string,
   opsi: { method?: "GET" | "POST"; body?: unknown } = {}
@@ -75,11 +77,46 @@ export async function ambilOutbox(limit = 5): Promise<OutboxItem[]> {
   return hasil.data?.items ?? [];
 }
 
-/** Mengonfirmasi hasil pengiriman satu pesan. */
+/**
+ * Mengonfirmasi hasil pengiriman satu pesan.
+ *
+ * Konfirmasi "sent" dicoba beberapa kali, dengan jeda. Pesan itu SUDAH
+ * terkirim ke WhatsApp waktu fungsi ini dipanggil - kegagalan di sini
+ * murni gagal MENGABARKANNYA ke PESTA (mis. sambungan sempat putus
+ * sesaat), bukan gagal mengirim. Tanpa percobaan ulang, baris outbox di
+ * server tertinggal berstatus "locked" sampai pemeliharaan server
+ * membebaskannya lagi (lihat runMaintenance() di repo pesta) - dan warga
+ * menerima pesan yang SAMA untuk kedua kalinya, padahal yang pertama
+ * sudah sampai. Konfirmasi "failed" tidak butuh ini: baris di server
+ * masih pending apa adanya, jadi tidak ada risiko pesan dobel meski
+ * dicoba sekali saja.
+ */
 export async function ackOutbox(id: number, isi: AckRequest): Promise<void> {
-  const hasil = await panggil(`/outbox/${id}/ack`, { method: "POST", body: isi });
-  if (!hasil.ok) {
-    log.warn("gagal mengirim konfirmasi", { id, status: hasil.status });
+  const jedaMs = isi.status === "sent" ? [0, 2000, 5000, 15000] : [0];
+
+  for (let i = 0; i < jedaMs.length; i++) {
+    if (i > 0) await tidur(jedaMs[i] ?? 0);
+
+    try {
+      const hasil = await panggil(`/outbox/${id}/ack`, { method: "POST", body: isi });
+      if (hasil.ok) return;
+      log.warn("gagal mengirim konfirmasi", { id, percobaanKe: i + 1, status: hasil.status });
+    } catch (error) {
+      if (error instanceof KontrakTidakCocok) throw error;
+      log.warn("gagal mengirim konfirmasi", {
+        id,
+        percobaanKe: i + 1,
+        pesan: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  if (isi.status === "sent") {
+    log.error(
+      "konfirmasi pengiriman gagal setelah beberapa percobaan - PESTA mungkin mengira pesan " +
+        "ini belum terkirim dan mengirimnya ulang",
+      { id }
+    );
   }
 }
 
