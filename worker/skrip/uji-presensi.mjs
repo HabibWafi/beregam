@@ -6,7 +6,7 @@ process.env.PESTA_BASE_URL = "https://example.invalid";
 process.env.BEREGAM_API_KEY = "x".repeat(32);
 process.env.WAHA_API_KEY = "uji-lokal";
 
-const { slotPresensiPada, pesanPresensi } = await import("../dist/presensi.js");
+const { slotPresensiPada, pesanPresensi, tokenMention } = await import("../dist/presensi.js");
 
 // Input UTC; WIB adalah UTC+7. Tanggal yang dipilih: Senin 2026-09-07 dan
 // Jumat 2026-09-11. Pengujian ini tidak menyentuh WAHA atau mengirim pesan.
@@ -43,5 +43,10 @@ const contoh = slotPresensiPada(utcUntukWib(senin, "07:25"));
 assert.ok(contoh);
 assert.match(pesanPresensi(contoh), /PRESENSI DATANG/);
 assert.match(pesanPresensi({ ...contoh, jenis: "pulang" }), /PRESENSI PULANG/);
+assert.equal(
+  tokenMention(["628111111111@c.us", "628222222222@c.us"]),
+  "@628111111111 @628222222222"
+);
+assert.equal(tokenMention(["123@lid", "bukan-nomor@c.us"]), "");
 
 console.log("OK - pemeriksaan jadwal dan isi pengingat presensi lulus.");

@@ -32,6 +32,9 @@ export interface WaGateway {
   /** Mencari ID grup dari nama yang sama persis. */
   findGroupIdBySubject(subject: string): Promise<string | null>;
 
+  /** Mengambil PN peserta aktif untuk mention eksplisit di dalam grup. */
+  groupParticipantMentions(groupId: string): Promise<string[]>;
+
   /** Status sesi, mis. "WORKING". null bila tidak terbaca. */
   sessionStatus(): Promise<string | null>;
 }
@@ -168,6 +171,31 @@ export class WahaGateway implements WaGateway {
     if (typeof id === "string") return id.endsWith("@g.us") ? id : null;
     const serial = id?._serialized ?? id?.id;
     return serial?.endsWith("@g.us") ? serial : null;
+  }
+
+  async groupParticipantMentions(groupId: string): Promise<string[]> {
+    type PesertaApi = {
+      id?: string;
+      /** Phone-number JID. WAHA 2026.8 mengisinya walau id utama berupa LID. */
+      pn?: string;
+      role?: string;
+    };
+
+    const peserta = await this.panggil<PesertaApi[]>(
+      `/api/${encodeURIComponent(this.sesi)}/groups/${encodeURIComponent(groupId)}/participants/v2`
+    );
+    if (!Array.isArray(peserta)) return [];
+
+    // PN wajib dipakai untuk teks @nomor. LID adalah identitas buram dan
+    // tidak dapat ditulis sebagai token mention yang dikenali WhatsApp.
+    return [
+      ...new Set(
+        peserta
+          .filter((item) => item.role !== "left")
+          .map((item) => item.pn ?? (item.id?.endsWith("@c.us") ? item.id : null))
+          .filter((id): id is string => Boolean(id?.endsWith("@c.us")))
+      ),
+    ];
   }
 
   async sessionStatus(): Promise<string | null> {

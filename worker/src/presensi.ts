@@ -102,6 +102,18 @@ export function pesanPresensi(slot: SlotPresensi): string {
   ].join("\n");
 }
 
+/**
+ * WAHA/WhatsApp mensyaratkan nomor juga tertulis sebagai @nomor di teks;
+ * array `mentions` saja diterima API tetapi diam-diam tidak menandai siapa pun.
+ */
+export function tokenMention(peserta: string[]): string {
+  return peserta
+    .map((id) => id.replace(/@c\.us$/, ""))
+    .filter((nomor) => /^\d+$/.test(nomor))
+    .map((nomor) => `@${nomor}`)
+    .join(" ");
+}
+
 async function bacaState(path: string): Promise<StatePresensi> {
   try {
     const isi = JSON.parse(await readFile(path, "utf8")) as Partial<StatePresensi>;
@@ -161,17 +173,28 @@ export class PengingatPresensi {
       log.info("grup pengingat presensi ditemukan", { grup: config.PRESENSI_GROUP_NAME });
     }
 
+    const mentions = await this.gateway.groupParticipantMentions(this.groupId);
+    const token = tokenMention(mentions);
+    if (mentions.length === 0 || !token) {
+      log.error("peserta grup tidak tersedia untuk mention pengingat presensi", {
+        grup: config.PRESENSI_GROUP_NAME,
+      });
+      return;
+    }
+
     // Klaim disimpan sebelum panggilan jaringan sebagai pengaman anti-duplikat.
     state.claimed[slot.kunci] = sekarang.toISOString();
     pangkasState(state, sekarang);
     await simpanState(this.pathState, state);
 
     try {
-      await this.gateway.sendText(this.groupId, pesanPresensi(slot), { mentions: ["all"] });
+      const teks = `${pesanPresensi(slot)}\n\n📣 ${token}`;
+      await this.gateway.sendText(this.groupId, teks, { mentions });
       log.info("pengingat presensi terkirim", {
         jenis: slot.jenis,
         waktuWib: slot.waktu,
         grup: config.PRESENSI_GROUP_NAME,
+        jumlahMention: mentions.length,
       });
     } catch (error) {
       // Status kirim bisa tidak pasti ketika HTTP timeout. Klaim sengaja
