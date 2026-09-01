@@ -44,9 +44,9 @@ assert.ok(contoh);
 assert.match(pesanPresensi(contoh), /PRESENSI DATANG/);
 assert.match(pesanPresensi({ ...contoh, jenis: "pulang" }), /PRESENSI PULANG/);
 assert.equal(
-  tokenMention(["628111111111@c.us", "628222222222@c.us"]),
-  "@628111111111 @628222222222"
+  tokenMention(["628111111111@c.us", "225512240709870@lid"]),
+  "@628111111111 @225512240709870"
 );
-assert.equal(tokenMention(["123@lid", "bukan-nomor@c.us"]), "");
+assert.equal(tokenMention(["bukan-nomor@c.us", "tanpa-suffix"]), "");
 
 console.log("OK - pemeriksaan jadwal dan isi pengingat presensi lulus.");

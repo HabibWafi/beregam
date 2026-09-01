@@ -32,7 +32,7 @@ export interface WaGateway {
   /** Mencari ID grup dari nama yang sama persis. */
   findGroupIdBySubject(subject: string): Promise<string | null>;
 
-  /** Mengambil PN peserta aktif untuk mention eksplisit di dalam grup. */
+  /** Mengambil JID peserta aktif untuk mention eksplisit di dalam grup. */
   groupParticipantMentions(groupId: string): Promise<string[]>;
 
   /** Status sesi, mis. "WORKING". null bila tidak terbaca. */
@@ -113,7 +113,11 @@ export class WahaGateway implements WaGateway {
     teks: string,
     opsi: { mentions?: string[] } = {}
   ): Promise<string | null> {
-    const hasil = await this.panggil<{ id?: string | { id?: string }; _data?: unknown }>(
+    const hasil = await this.panggil<{
+      id?: string | { id?: string };
+      key?: { id?: string };
+      _data?: { id?: string; key?: { id?: string } };
+    }>(
       "/api/sendText",
       {
         method: "POST",
@@ -135,6 +139,9 @@ export class WahaGateway implements WaGateway {
     const id = hasil.id;
     if (typeof id === "string") return id;
     if (id && typeof id === "object" && typeof id.id === "string") return id.id;
+    if (typeof hasil.key?.id === "string") return hasil.key.id;
+    if (typeof hasil._data?.key?.id === "string") return hasil._data.key.id;
+    if (typeof hasil._data?.id === "string") return hasil._data.id;
     return null;
   }
 
@@ -176,24 +183,40 @@ export class WahaGateway implements WaGateway {
   async groupParticipantMentions(groupId: string): Promise<string[]> {
     type PesertaApi = {
       id?: string;
-      /** Phone-number JID. WAHA 2026.8 mengisinya walau id utama berupa LID. */
+      /** Phone-number JID. Hanya fallback bila grup tidak memakai LID. */
       pn?: string;
       role?: string;
     };
 
-    const peserta = await this.panggil<PesertaApi[]>(
-      `/api/${encodeURIComponent(this.sesi)}/groups/${encodeURIComponent(groupId)}/participants/v2`
-    );
+    const [peserta, sesi] = await Promise.all([
+      this.panggil<PesertaApi[]>(
+        `/api/${encodeURIComponent(this.sesi)}/groups/${encodeURIComponent(groupId)}/participants/v2`
+      ),
+      this.panggil<{ me?: { id?: string; lid?: string } }>(
+        `/api/sessions/${encodeURIComponent(this.sesi)}`,
+        { diamSaatGagal: true }
+      ),
+    ]);
     if (!Array.isArray(peserta)) return [];
 
-    // PN wajib dipakai untuk teks @nomor. LID adalah identitas buram dan
-    // tidak dapat ditulis sebagai token mention yang dikenali WhatsApp.
+    const idSendiri = new Set([sesi?.me?.id, sesi?.me?.lid].filter(Boolean));
+
+    // Grup ini memakai LID. NOWEB mengirim mention melalui JID utama
+    // peserta (p.id); memakai PN @c.us pada grup LID membuat Baileys tidak
+    // menghasilkan ID pesan. PN hanya dipakai sebagai fallback.
     return [
       ...new Set(
         peserta
           .filter((item) => item.role !== "left")
-          .map((item) => item.pn ?? (item.id?.endsWith("@c.us") ? item.id : null))
-          .filter((id): id is string => Boolean(id?.endsWith("@c.us")))
+          .map((item) => item.id ?? item.pn ?? null)
+          .filter(
+            (id): id is string =>
+              Boolean(
+                id &&
+                  (id.endsWith("@lid") || id.endsWith("@c.us")) &&
+                  !idSendiri.has(id)
+              )
+          )
       ),
     ];
   }

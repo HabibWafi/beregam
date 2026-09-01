@@ -103,12 +103,12 @@ export function pesanPresensi(slot: SlotPresensi): string {
 }
 
 /**
- * WAHA/WhatsApp mensyaratkan nomor juga tertulis sebagai @nomor di teks;
+ * WAHA/WhatsApp mensyaratkan ID juga tertulis sebagai @angka di teks;
  * array `mentions` saja diterima API tetapi diam-diam tidak menandai siapa pun.
  */
 export function tokenMention(peserta: string[]): string {
   return peserta
-    .map((id) => id.replace(/@c\.us$/, ""))
+    .map((id) => id.replace(/@(c\.us|lid)$/, ""))
     .filter((nomor) => /^\d+$/.test(nomor))
     .map((nomor) => `@${nomor}`)
     .join(" ");
