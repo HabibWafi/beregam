@@ -23,7 +23,14 @@ export interface WaGateway {
   stopTyping(chatId: string): Promise<void>;
 
   /** Mengirim pesan teks. Mengembalikan id pesan dari WhatsApp bila ada. */
-  sendText(chatId: string, teks: string): Promise<string | null>;
+  sendText(
+    chatId: string,
+    teks: string,
+    opsi?: { mentions?: string[] }
+  ): Promise<string | null>;
+
+  /** Mencari ID grup dari nama yang sama persis. */
+  findGroupIdBySubject(subject: string): Promise<string | null>;
 
   /** Status sesi, mis. "WORKING". null bila tidak terbaca. */
   sessionStatus(): Promise<string | null>;
@@ -98,10 +105,22 @@ export class WahaGateway implements WaGateway {
     });
   }
 
-  async sendText(chatId: string, teks: string): Promise<string | null> {
+  async sendText(
+    chatId: string,
+    teks: string,
+    opsi: { mentions?: string[] } = {}
+  ): Promise<string | null> {
     const hasil = await this.panggil<{ id?: string | { id?: string }; _data?: unknown }>(
       "/api/sendText",
-      { method: "POST", body: { session: this.sesi, chatId, text: teks } }
+      {
+        method: "POST",
+        body: {
+          session: this.sesi,
+          chatId,
+          text: teks,
+          ...(opsi.mentions?.length ? { mentions: opsi.mentions } : {}),
+        },
+      }
     );
 
     if (hasil === null) {
@@ -114,6 +133,41 @@ export class WahaGateway implements WaGateway {
     if (typeof id === "string") return id;
     if (id && typeof id === "object" && typeof id.id === "string") return id.id;
     return null;
+  }
+
+  async findGroupIdBySubject(subject: string): Promise<string | null> {
+    type IdApi = string | { _serialized?: string; id?: string };
+    type GrupApi = {
+      id?: IdApi;
+      subject?: string;
+      name?: string;
+      _data?: { id?: IdApi; subject?: string };
+    };
+
+    const respons = await this.panggil<GrupApi[] | Record<string, GrupApi>>(
+      `/api/${encodeURIComponent(this.sesi)}/groups?limit=100&offset=0&` +
+        "sortBy=subject&sortOrder=asc&exclude=participants"
+    );
+
+    // Bentuk respons bergantung engine. NOWEB 2026.8 mengembalikan objek
+    // dengan ID grup sebagai kunci, sedangkan engine lain dapat berupa array.
+    const kelompok: GrupApi[] = Array.isArray(respons)
+      ? respons
+      : respons && typeof respons === "object"
+        ? Object.entries(respons).map(([id, grup]) => ({ ...grup, id }))
+        : [];
+
+    const dicari = subject.trim().toLocaleLowerCase("id-ID");
+    const grup = kelompok.find((item) => {
+      const nama = item.subject ?? item.name ?? item._data?.subject ?? "";
+      return nama.trim().toLocaleLowerCase("id-ID") === dicari;
+    });
+    if (!grup) return null;
+
+    const id = grup.id ?? grup._data?.id;
+    if (typeof id === "string") return id.endsWith("@g.us") ? id : null;
+    const serial = id?._serialized ?? id?.id;
+    return serial?.endsWith("@g.us") ? serial : null;
   }
 
   async sessionStatus(): Promise<string | null> {

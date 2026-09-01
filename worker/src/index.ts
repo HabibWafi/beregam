@@ -3,6 +3,7 @@ import { log, samarkanNomor } from "./logger.js";
 import { gateway } from "./gateway.js";
 import { ackOutbox, ambilOutbox, kirimHeartbeat, KontrakTidakCocok } from "./pesta.js";
 import { CONTRACTS_VERSION, type OutboxItem } from "./generated/contracts.js";
+import { PengingatPresensi } from "./presensi.js";
 
 /**
  * Worker pesan Beregam.
@@ -21,6 +22,8 @@ let berhenti = false;
 let memegangSewa = false;
 let botAktif = true;
 let sedangMemproses = false;
+
+const pengingatPresensi = new PengingatPresensi(gateway, () => botAktif);
 
 const tidur = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -176,6 +179,11 @@ async function jalan(): Promise<void> {
     });
   }
 
+  // Sesudah heartbeat pertama agar saklar admin dihormati sejak awal.
+  // Loop berikutnya tetap terpisah dari polling: pengingat kantor tidak
+  // boleh terlambat hanya karena koneksi Hostinger sedang menjalani backoff.
+  void pengingatPresensi.jalan();
+
   let heartbeatBerikutnya = Date.now() + config.HEARTBEAT_INTERVAL_MS;
 
   while (!berhenti) {
@@ -222,6 +230,7 @@ async function jalan(): Promise<void> {
 async function hentikan(sinyal: string): Promise<void> {
   if (berhenti) return;
   berhenti = true;
+  pengingatPresensi.stop();
   log.info(`menerima ${sinyal}, menyelesaikan pekerjaan yang sedang jalan...`);
 
   const batas = Date.now() + 20_000;

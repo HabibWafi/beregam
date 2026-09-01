@@ -49,6 +49,34 @@ const skema = z.object({
   JEDA_MIN_DETIK: z.coerce.number().int().min(1).default(3),
   JEDA_MAX_DETIK: z.coerce.number().int().min(1).default(8),
 
+  /**
+   * Pengingat presensi hanya diaktifkan pada SATU PC utama. PC cadangan
+   * wajib memakai false agar tag-all tidak terkirim dua kali.
+   */
+  PRESENSI_ENABLED: z
+    .string()
+    .default("true")
+    .transform((nilai, ctx) => {
+      const normal = nilai.trim().toLowerCase();
+      if (["true", "1", "ya", "yes"].includes(normal)) return true;
+      if (["false", "0", "tidak", "no"].includes(normal)) return false;
+      ctx.addIssue({ code: "custom", message: "isi true atau false" });
+      return z.NEVER;
+    }),
+
+  /** Nama grup dipakai untuk pencarian persis bila ID belum dikunci. */
+  PRESENSI_GROUP_NAME: z.string().trim().min(1).default("NEW BPS MURA"),
+
+  /** ID grup opsional, mis. 123456789@g.us. */
+  PRESENSI_GROUP_ID: z
+    .string()
+    .trim()
+    .refine((nilai) => nilai === "" || nilai.endsWith("@g.us"), "harus berakhiran @g.us")
+    .default(""),
+
+  /** Lokasi jejak anti-duplikat, relatif terhadap folder worker. */
+  PRESENSI_STATE_FILE: z.string().trim().min(1).default(".data/presensi-reminders.json"),
+
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 });
 

@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "dev": "node --watch --experimental-strip-types src/index.ts",
     "cek": "tsc --noEmit",
+    "uji:presensi": "node skrip/uji-presensi.mjs",
     "panel": "node dist/panel/index.js",
     "panel:dev": "node --watch --experimental-strip-types src/panel/index.ts"
   },
