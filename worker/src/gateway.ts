@@ -35,8 +35,20 @@ export interface WaGateway {
   /** Mengambil JID peserta aktif untuk mention eksplisit di dalam grup. */
   groupParticipantMentions(groupId: string): Promise<string[]>;
 
+  /** Mengambil identitas peserta grup untuk pemilihan penerima presensi. */
+  groupParticipants(groupId: string): Promise<GroupParticipant[]>;
+
   /** Status sesi, mis. "WORKING". null bila tidak terbaca. */
   sessionStatus(): Promise<string | null>;
+}
+
+export interface GroupParticipant {
+  /** JID utama untuk mention. Pada NOWEB umumnya berupa LID. */
+  id: string;
+  /** Nomor WhatsApp asli tanpa akhiran @c.us. */
+  phone: string;
+  role: string;
+  isSelf: boolean;
 }
 
 interface OpsiPanggil {
@@ -180,7 +192,7 @@ export class WahaGateway implements WaGateway {
     return serial?.endsWith("@g.us") ? serial : null;
   }
 
-  async groupParticipantMentions(groupId: string): Promise<string[]> {
+  async groupParticipants(groupId: string): Promise<GroupParticipant[]> {
     type PesertaApi = {
       id?: string;
       /** Phone-number JID. Hanya fallback bila grup tidak memakai LID. */
@@ -201,24 +213,27 @@ export class WahaGateway implements WaGateway {
 
     const idSendiri = new Set([sesi?.me?.id, sesi?.me?.lid].filter(Boolean));
 
+    const unik = new Map<string, GroupParticipant>();
+    for (const item of peserta) {
+      if (item.role === "left") continue;
+      const id = item.id ?? item.pn ?? "";
+      const phone = (item.pn ?? "").replace(/@c\.us$/, "");
+      if (!/^(?:\d+)@(lid|c\.us)$/.test(id) || !/^\d{8,15}$/.test(phone)) continue;
+      unik.set(phone, {
+        id,
+        phone,
+        role: item.role ?? "participant",
+        isSelf: idSendiri.has(id) || idSendiri.has(item.pn),
+      });
+    }
+    return [...unik.values()];
+  }
+
+  async groupParticipantMentions(groupId: string): Promise<string[]> {
+    const peserta = await this.groupParticipants(groupId);
     // Grup ini memakai LID. NOWEB mengirim mention melalui JID utama
-    // peserta (p.id); memakai PN @c.us pada grup LID membuat Baileys tidak
-    // menghasilkan ID pesan. PN hanya dipakai sebagai fallback.
-    return [
-      ...new Set(
-        peserta
-          .filter((item) => item.role !== "left")
-          .map((item) => item.id ?? item.pn ?? null)
-          .filter(
-            (id): id is string =>
-              Boolean(
-                id &&
-                  (id.endsWith("@lid") || id.endsWith("@c.us")) &&
-                  !idSendiri.has(id)
-              )
-          )
-      ),
-    ];
+    // peserta; memakai PN @c.us pada grup LID tidak menghasilkan ID pesan.
+    return peserta.filter((item) => !item.isSelf).map((item) => item.id);
   }
 
   async sessionStatus(): Promise<string | null> {

@@ -1,9 +1,15 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { konfig, periksaKonfig } from "./konfigurasi.js";
 import { HALAMAN } from "./halaman.js";
+import { HALAMAN_PRESENSI } from "./presensi-halaman.js";
 import * as waha from "./waha.js";
 import * as sistem from "./sistem.js";
 import { statusPesta } from "./pesta.js";
+import {
+  bacaKonfigurasiPresensi,
+  bacaRiwayatPresensi,
+  simpanKonfigurasiPresensi,
+} from "../presensi-store.js";
 
 /**
  * Panel kendali Beregam - berjalan di PC kantor.
@@ -88,6 +94,12 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (metode === "GET" && (jalur === "/presensi" || jalur === "/presensi/")) {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(HALAMAN_PRESENSI);
+      return;
+    }
+
     // --- keadaan ---------------------------------------------------------
     if (metode === "GET" && jalur === "/api/status") {
       return balas(res, 200, await kumpulkanStatus());
@@ -98,6 +110,31 @@ const server = createServer(async (req, res) => {
       const isi =
         sumber === "engine" ? await sistem.logKontainer(200) : await sistem.logLayanan(200);
       return balas(res, 200, { sumber, isi });
+    }
+
+    // --- pengingat presensi ----------------------------------------------
+    if (metode === "GET" && jalur === "/api/presensi") {
+      const [konfigurasi, riwayat, grup] = await Promise.all([
+        bacaKonfigurasiPresensi(),
+        bacaRiwayatPresensi(),
+        waha.pesertaGrup(konfig.PRESENSI_GROUP_NAME, konfig.PRESENSI_GROUP_ID),
+      ]);
+      return balas(res, 200, {
+        konfigurasi,
+        riwayat: riwayat.slice(0, 30),
+        grup: {
+          ok: grup.ok,
+          nama: grup.namaGrup,
+          jumlah: grup.peserta.length,
+          ...(grup.pesan ? { pesan: grup.pesan } : {}),
+        },
+        peserta: grup.peserta,
+      });
+    }
+
+    if (metode === "POST" && jalur === "/api/presensi/config") {
+      const konfigurasi = await simpanKonfigurasiPresensi(await bacaBadan(req));
+      return balas(res, 200, { ok: true, konfigurasi });
     }
 
     // --- penautan WhatsApp ------------------------------------------------

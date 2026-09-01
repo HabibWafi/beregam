@@ -28,6 +28,9 @@ export interface KonfigPanel {
   NAMA_LAYANAN: string;
   /** Nama kontainer engine WhatsApp. */
   NAMA_KONTAINER: string;
+  /** Grup yang dipantau halaman pengingat presensi. */
+  PRESENSI_GROUP_NAME: string;
+  PRESENSI_GROUP_ID: string;
 }
 
 export interface Kekurangan {
@@ -49,6 +52,8 @@ export const konfig: KonfigPanel = {
   PANEL_PORT: Number(ambil("PANEL_PORT", "3100")) || 3100,
   NAMA_LAYANAN: ambil("NAMA_LAYANAN", "beregam-worker"),
   NAMA_KONTAINER: ambil("NAMA_KONTAINER", "beregam-waha"),
+  PRESENSI_GROUP_NAME: ambil("PRESENSI_GROUP_NAME", "NEW BPS MURA"),
+  PRESENSI_GROUP_ID: ambil("PRESENSI_GROUP_ID"),
 };
 
 /**

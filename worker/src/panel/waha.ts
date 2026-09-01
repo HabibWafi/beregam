@@ -127,6 +127,101 @@ export async function versiEngine(): Promise<{ versi: string; engine: string } |
   return { versi: hasil.data.version ?? "?", engine: hasil.data.engine ?? "?" };
 }
 
+export interface PesertaGrupPanel {
+  nomor: string;
+  peran: string;
+  diriSendiri: boolean;
+}
+
+export interface HasilPesertaGrup {
+  ok: boolean;
+  grupId: string | null;
+  namaGrup: string;
+  peserta: PesertaGrupPanel[];
+  pesan?: string;
+}
+
+/** Daftar nomor asli peserta; LID tidak pernah dikirim ke browser. */
+export async function pesertaGrup(
+  namaGrup: string,
+  grupIdTerkunci = ""
+): Promise<HasilPesertaGrup> {
+  let grupId = grupIdTerkunci || null;
+  if (!grupId) {
+    type Grup = { id?: string; subject?: string; name?: string; _data?: { subject?: string } };
+    const hasil = await panggil<Grup[] | Record<string, Grup>>(
+      `/api/${encodeURIComponent(konfig.WAHA_SESSION)}/groups?limit=100&offset=0&` +
+        "sortBy=subject&sortOrder=asc&exclude=participants"
+    );
+    if (!hasil.ok || !hasil.data) {
+      return { ok: false, grupId: null, namaGrup, peserta: [], pesan: hasil.pesan };
+    }
+    const daftar = Array.isArray(hasil.data)
+      ? hasil.data
+      : Object.entries(hasil.data).map(([id, grup]) => ({ ...grup, id }));
+    const dicari = namaGrup.trim().toLocaleLowerCase("id-ID");
+    grupId =
+      daftar.find((grup) =>
+        (grup.subject ?? grup.name ?? grup._data?.subject ?? "")
+          .trim()
+          .toLocaleLowerCase("id-ID") === dicari
+      )?.id ?? null;
+  }
+
+  if (!grupId?.endsWith("@g.us")) {
+    return {
+      ok: false,
+      grupId: null,
+      namaGrup,
+      peserta: [],
+      pesan: `Grup "${namaGrup}" tidak ditemukan.`,
+    };
+  }
+
+  type PesertaApi = { id?: string; pn?: string; role?: string };
+  const [hasilPeserta, hasilSesi] = await Promise.all([
+    panggil<PesertaApi[]>(
+      `/api/${encodeURIComponent(konfig.WAHA_SESSION)}/groups/${encodeURIComponent(grupId)}/participants/v2`
+    ),
+    panggil<{ me?: { id?: string; lid?: string } }>(
+      `/api/sessions/${encodeURIComponent(konfig.WAHA_SESSION)}`
+    ),
+  ]);
+  if (!hasilPeserta.ok || !Array.isArray(hasilPeserta.data)) {
+    return {
+      ok: false,
+      grupId,
+      namaGrup,
+      peserta: [],
+      pesan: hasilPeserta.pesan ?? "Peserta grup tidak dapat dibaca.",
+    };
+  }
+
+  const milikSendiri = new Set(
+    [hasilSesi.data?.me?.id, hasilSesi.data?.me?.lid].filter(
+      (nilai): nilai is string => Boolean(nilai)
+    )
+  );
+  const unik = new Map<string, PesertaGrupPanel>();
+  for (const peserta of hasilPeserta.data) {
+    if (peserta.role === "left") continue;
+    const nomor = (peserta.pn ?? "").replace(/@c\.us$/, "");
+    if (!/^\d{8,15}$/.test(nomor)) continue;
+    unik.set(nomor, {
+      nomor,
+      peran: peserta.role ?? "participant",
+      diriSendiri: milikSendiri.has(peserta.id ?? "") || milikSendiri.has(peserta.pn ?? ""),
+    });
+  }
+
+  return {
+    ok: true,
+    grupId,
+    namaGrup,
+    peserta: [...unik.values()].sort((a, b) => a.nomor.localeCompare(b.nomor)),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Menautkan
 // ---------------------------------------------------------------------------

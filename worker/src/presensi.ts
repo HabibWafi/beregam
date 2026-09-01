@@ -1,8 +1,15 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { config } from "./config.js";
-import type { WaGateway } from "./gateway.js";
+import type { GroupParticipant, WaGateway } from "./gateway.js";
 import { log } from "./logger.js";
+import {
+  bacaKonfigurasiPresensi,
+  PESAN_DATANG_BAWAAN,
+  PESAN_PULANG_BAWAAN,
+  tambahRiwayatPresensi,
+  type KonfigurasiPresensi,
+} from "./presensi-store.js";
 
 const ZONA_WIB = "Asia/Jakarta";
 const JEDA_PERIKSA_MS = 10_000;
@@ -82,24 +89,22 @@ export function slotPresensiPada(waktu: Date): SlotPresensi | null {
 }
 
 export function pesanPresensi(slot: SlotPresensi): string {
-  if (slot.jenis === "datang") {
-    return [
-      "⏰ *PENGINGAT PRESENSI DATANG*",
-      "",
-      "Selamat pagi Bapak/Ibu 👋",
-      "Jangan lupa melakukan presensi datang dan pastikan presensi sudah berhasil tercatat.",
-      "",
-      "Terima kasih. Semangat beraktivitas! 🙏",
-    ].join("\n");
-  }
+  return slot.jenis === "datang" ? PESAN_DATANG_BAWAAN : PESAN_PULANG_BAWAAN;
+}
 
-  return [
-    "⏰ *PENGINGAT PRESENSI PULANG*",
-    "",
-    "Bapak/Ibu, jangan lupa melakukan presensi pulang dan pastikan presensi sudah berhasil tercatat.",
-    "",
-    "Terima kasih. Hati-hati di perjalanan! 🙏",
-  ].join("\n");
+/** Memetakan nomor pilihan ke LID terkini; nomor yang sudah keluar dilewati. */
+export function pilihMention(
+  peserta: GroupParticipant[],
+  pengaturan: Pick<KonfigurasiPresensi, "modeMention" | "nomorDipilih">
+): string[] {
+  const dipilih = new Set(pengaturan.nomorDipilih);
+  return peserta
+    .filter(
+      (item) =>
+        !item.isSelf &&
+        (pengaturan.modeMention === "semua" || dipilih.has(item.phone))
+    )
+    .map((item) => item.id);
 }
 
 /**
@@ -156,6 +161,9 @@ export class PengingatPresensi {
   async periksa(sekarang = new Date()): Promise<void> {
     if (!config.PRESENSI_ENABLED || !this.botAktif()) return;
 
+    const pengaturan = await bacaKonfigurasiPresensi();
+    if (!pengaturan.aktif) return;
+
     const slot = slotPresensiPada(sekarang);
     if (!slot) return;
 
@@ -173,7 +181,8 @@ export class PengingatPresensi {
       log.info("grup pengingat presensi ditemukan", { grup: config.PRESENSI_GROUP_NAME });
     }
 
-    const mentions = await this.gateway.groupParticipantMentions(this.groupId);
+    const peserta = await this.gateway.groupParticipants(this.groupId);
+    const mentions = pilihMention(peserta, pengaturan);
     const token = tokenMention(mentions);
     if (mentions.length === 0 || !token) {
       log.error("peserta grup tidak tersedia untuk mention pengingat presensi", {
@@ -188,8 +197,19 @@ export class PengingatPresensi {
     await simpanState(this.pathState, state);
 
     try {
-      const teks = `${pesanPresensi(slot)}\n\n📣 ${token}`;
-      await this.gateway.sendText(this.groupId, teks, { mentions });
+      const isiPesan =
+        slot.jenis === "datang" ? pengaturan.pesanDatang : pengaturan.pesanPulang;
+      const teks = `${isiPesan}\n\n📣 ${token}`;
+      const messageId = await this.gateway.sendText(this.groupId, teks, { mentions });
+      await tambahRiwayatPresensi({
+        waktu: sekarang.toISOString(),
+        jenis: slot.jenis,
+        jadwalWib: slot.waktu,
+        status: "terkirim",
+        jumlahMention: mentions.length,
+        pesan: isiPesan,
+        adaMessageId: Boolean(messageId),
+      });
       log.info("pengingat presensi terkirim", {
         jenis: slot.jenis,
         waktuWib: slot.waktu,
@@ -204,6 +224,16 @@ export class PengingatPresensi {
         waktuWib: slot.waktu,
         grup: config.PRESENSI_GROUP_NAME,
         pesan: error instanceof Error ? error.message : String(error),
+      });
+      await tambahRiwayatPresensi({
+        waktu: sekarang.toISOString(),
+        jenis: slot.jenis,
+        jadwalWib: slot.waktu,
+        status: "gagal",
+        jumlahMention: mentions.length,
+        pesan: slot.jenis === "datang" ? pengaturan.pesanDatang : pengaturan.pesanPulang,
+        adaMessageId: false,
+        galat: (error instanceof Error ? error.message : String(error)).slice(0, 300),
       });
     }
   }

@@ -65,6 +65,8 @@ export const HALAMAN = String.raw`<!doctype html>
   .tab { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
   .tab button.aktif { background: var(--biru); border-color: var(--biru); color: #04121e; }
   .catatan { font-size: 13px; color: var(--redup); margin-top: 8px; }
+  a.pintasan { color: var(--biru); font-weight: 600; text-decoration: none; }
+  a.pintasan:hover { text-decoration: underline; }
   .peringatan {
     border-left: 3px solid var(--kuning); background: color-mix(in srgb, var(--kuning) 10%, transparent);
     padding: 10px 13px; border-radius: 0 8px 8px 0; margin-bottom: 14px; font-size: 14px;
@@ -87,6 +89,7 @@ export const HALAMAN = String.raw`<!doctype html>
     <span class="sub" id="jam">memuat...</span>
   </header>
   <div class="sub">Bot WhatsApp BPS Kabupaten Musi Rawas - kendali lokal di PC kantor</div>
+  <div style="margin-top:8px"><a class="pintasan" href="/presensi">Buka Pengingat Presensi →</a></div>
 
   <div id="kekurangan"></div>
 

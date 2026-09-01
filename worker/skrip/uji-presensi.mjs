@@ -6,7 +6,8 @@ process.env.PESTA_BASE_URL = "https://example.invalid";
 process.env.BEREGAM_API_KEY = "x".repeat(32);
 process.env.WAHA_API_KEY = "uji-lokal";
 
-const { slotPresensiPada, pesanPresensi, tokenMention } = await import("../dist/presensi.js");
+const { slotPresensiPada, pesanPresensi, tokenMention, pilihMention } = await import("../dist/presensi.js");
+const { validasiKonfigurasi, konfigurasiBawaan } = await import("../dist/presensi-store.js");
 
 // Input UTC; WIB adalah UTC+7. Tanggal yang dipilih: Senin 2026-09-07 dan
 // Jumat 2026-09-11. Pengujian ini tidak menyentuh WAHA atau mengirim pesan.
@@ -49,4 +50,40 @@ assert.equal(
 );
 assert.equal(tokenMention(["bukan-nomor@c.us", "tanpa-suffix"]), "");
 
-console.log("OK - pemeriksaan jadwal dan isi pengingat presensi lulus.");
+const peserta = [
+  { id: "111@lid", phone: "628111111111", role: "participant", isSelf: false },
+  { id: "222@lid", phone: "628222222222", role: "admin", isSelf: false },
+  { id: "333@lid", phone: "628333333333", role: "superadmin", isSelf: true },
+];
+assert.deepEqual(
+  pilihMention(peserta, { modeMention: "semua", nomorDipilih: [] }),
+  ["111@lid", "222@lid"]
+);
+assert.deepEqual(
+  pilihMention(peserta, { modeMention: "pilihan", nomorDipilih: ["628222222222"] }),
+  ["222@lid"]
+);
+assert.deepEqual(
+  pilihMention(peserta, { modeMention: "pilihan", nomorDipilih: ["628999999999"] }),
+  []
+);
+
+const bawaan = konfigurasiBawaan();
+assert.equal(bawaan.modeMention, "semua");
+assert.equal(bawaan.aktif, true);
+assert.match(bawaan.pesanDatang, /PRESENSI DATANG/);
+const tersaring = validasiKonfigurasi({
+  aktif: true,
+  modeMention: "pilihan",
+  nomorDipilih: ["628111111111", "628111111111"],
+  pesanDatang: " Pesan pagi ",
+  pesanPulang: " Pesan sore ",
+});
+assert.deepEqual(tersaring.nomorDipilih, ["628111111111"]);
+assert.equal(tersaring.pesanDatang, "Pesan pagi");
+assert.throws(
+  () => validasiKonfigurasi({ ...tersaring, nomorDipilih: ["nomor-salah"] }),
+  /tidak valid/
+);
+
+console.log("OK - jadwal, pilihan peserta, dan konfigurasi presensi lulus.");
