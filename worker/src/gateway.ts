@@ -29,6 +29,9 @@ export interface WaGateway {
     opsi?: { mentions?: string[] }
   ): Promise<string | null>;
 
+  /** Mengirim menu daftar interaktif pada chat langsung. */
+  sendList(chatId: string, message: ListMessage): Promise<string | null>;
+
   /** Mencari ID grup dari nama yang sama persis. */
   findGroupIdBySubject(subject: string): Promise<string | null>;
 
@@ -41,6 +44,23 @@ export interface WaGateway {
   /** Status sesi, mis. "WORKING". null bila tidak terbaca. */
   sessionStatus(): Promise<string | null>;
 }
+
+export interface ListMessage {
+  title: string;
+  description?: string;
+  footer?: string;
+  button: string;
+  sections: Array<{
+    title: string;
+    rows: Array<{ title: string; rowId: string; description?: string | null }>;
+  }>;
+}
+
+type HasilPesan = {
+  id?: string | { id?: string };
+  key?: { id?: string };
+  _data?: { id?: string; key?: { id?: string } };
+};
 
 export interface GroupParticipant {
   /** JID utama untuk mention. Pada NOWEB umumnya berupa LID. */
@@ -62,6 +82,16 @@ interface OpsiPanggil {
 export class WahaGateway implements WaGateway {
   private readonly dasar = config.WAHA_BASE_URL.replace(/\/$/, "");
   private readonly sesi = config.WAHA_SESSION;
+
+  private idPesan(hasil: HasilPesan): string | null {
+    const id = hasil.id;
+    if (typeof id === "string") return id;
+    if (id && typeof id === "object" && typeof id.id === "string") return id.id;
+    if (typeof hasil.key?.id === "string") return hasil.key.id;
+    if (typeof hasil._data?.key?.id === "string") return hasil._data.key.id;
+    if (typeof hasil._data?.id === "string") return hasil._data.id;
+    return null;
+  }
 
   private async panggil<T>(jalur: string, opsi: OpsiPanggil = {}): Promise<T | null> {
     try {
@@ -125,11 +155,7 @@ export class WahaGateway implements WaGateway {
     teks: string,
     opsi: { mentions?: string[] } = {}
   ): Promise<string | null> {
-    const hasil = await this.panggil<{
-      id?: string | { id?: string };
-      key?: { id?: string };
-      _data?: { id?: string; key?: { id?: string } };
-    }>(
+    const hasil = await this.panggil<HasilPesan>(
       "/api/sendText",
       {
         method: "POST",
@@ -146,15 +172,16 @@ export class WahaGateway implements WaGateway {
       throw new Error("Engine gagal mengirim pesan");
     }
 
-    // Bentuk id berbeda antar versi engine: kadang string, kadang objek.
-    // Ditangani di sini supaya sisa worker tidak perlu tahu.
-    const id = hasil.id;
-    if (typeof id === "string") return id;
-    if (id && typeof id === "object" && typeof id.id === "string") return id.id;
-    if (typeof hasil.key?.id === "string") return hasil.key.id;
-    if (typeof hasil._data?.key?.id === "string") return hasil._data.key.id;
-    if (typeof hasil._data?.id === "string") return hasil._data.id;
-    return null;
+    return this.idPesan(hasil);
+  }
+
+  async sendList(chatId: string, message: ListMessage): Promise<string | null> {
+    const hasil = await this.panggil<HasilPesan>("/api/sendList", {
+      method: "POST",
+      body: { session: this.sesi, chatId, reply_to: null, message },
+    });
+    if (hasil === null) throw new Error("Engine gagal mengirim List Message");
+    return this.idPesan(hasil);
   }
 
   async findGroupIdBySubject(subject: string): Promise<string | null> {

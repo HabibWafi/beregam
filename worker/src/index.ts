@@ -75,7 +75,27 @@ async function kirimSatu(item: OutboxItem): Promise<void> {
       return;
     }
 
-    const waMessageId = await gateway.sendText(item.waId, teks);
+    let waMessageId: string | null;
+    let format = "teks";
+
+    if (item.type === "menu" && item.payload.list) {
+      try {
+        waMessageId = await gateway.sendList(item.waId, item.payload.list);
+        format = "list";
+      } catch (error) {
+        // WAHA sendiri menyebut List Message rapuh. Kegagalannya tidak boleh
+        // membuat warga kehilangan menu: kirim teks bernomor yang selalu
+        // tersedia pada payload yang sama.
+        log.warn("List Message gagal, memakai menu teks", {
+          id: item.id,
+          kontak: nomor,
+          pesan: error instanceof Error ? error.message : String(error),
+        });
+        waMessageId = await gateway.sendText(item.waId, teks);
+      }
+    } else {
+      waMessageId = await gateway.sendText(item.waId, teks);
+    }
 
     await ackOutbox(item.id, {
       status: "sent",
@@ -86,6 +106,7 @@ async function kirimSatu(item: OutboxItem): Promise<void> {
       id: item.id,
       kontak: nomor,
       jedaDetik: Math.round(jeda / 100) / 10,
+      format,
     });
   } catch (error) {
     const pesan = error instanceof Error ? error.message : String(error);
