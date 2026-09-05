@@ -58,27 +58,28 @@ Write-Output ""
 $aksi = New-ScheduledTaskAction -Execute $wsl `
     -Argument "-d $Distro -u root --exec sleep infinity"
 
-# Pemicu AtStartup dan RunLevel Highest sama-sama menuntut hak
-# administrator. Skrip ini sengaja tidak memaksa elevasi: memasang autostart
-# adalah pekerjaan sekali jalan yang mungkin dikerjakan rekan kerja tanpa
-# akses admin, dan pemicu logon saja sudah cukup untuk PC yang memang
-# di-set login otomatis (lihat SETUP-PC.md langkah 9).
+# Task berbasis pengguna berhenti saat sesi pengguna berakhir. Untuk bot yang
+# harus hidup 24 jam, Windows menjalankan tugas sejak boot dengan token S4U
+# milik pengguna yang memasang WSL. SYSTEM tidak dipakai karena distribusi WSL
+# terdaftar per pengguna dan belum tentu terlihat oleh akun SYSTEM.
+# Jalur pengguna biasa tetap disediakan sebagai pemulihan sementara, tetapi
+# tidak pernah diklaim sebagai konfigurasi layanan 24 jam.
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $adminSekarang = (New-Object Security.Principal.WindowsPrincipal($id)).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator
 )
 
-$pemicu = @(New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME")
-$tingkat = "Limited"
-
 if ($adminSekarang) {
-    $pemicu += New-ScheduledTaskTrigger -AtStartup
-    $tingkat = "Highest"
-    Write-Output "  hak    : administrator - dipasang dengan pemicu saat Windows menyala"
+    $pemicu = @(New-ScheduledTaskTrigger -AtStartup)
+    $principal = New-ScheduledTaskPrincipal `
+        -UserId "$env:USERDOMAIN\$env:USERNAME" `
+        -LogonType S4U -RunLevel Highest
+    Write-Output "  hak    : administrator - layanan sejak Windows menyala"
 } else {
-    Write-Output "  hak    : pengguna biasa - dipasang dengan pemicu saat logon saja"
-    Write-Output "           (jalankan sebagai Administrator bila ingin Beregam hidup"
-    Write-Output "            bahkan sebelum ada yang login)"
+    $pemicu = @(New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME")
+    $principal = $null
+    Write-Output "  hak    : pengguna biasa - hanya pemulihan saat logon"
+    Write-Output "           jalankan sebagai Administrator untuk autostart 24 jam"
 }
 
 # ExecutionTimeLimit nol wajib: tanpa itu Windows membunuh tugas setelah
@@ -99,12 +100,18 @@ $setelan = New-ScheduledTaskSettingsSet `
 # Menghapus dulu justru berbahaya: kalau pendaftaran gagal karena hak akses,
 # sistem tertinggal tanpa tugas sama sekali - persis yang pernah terjadi.
 try {
-    Register-ScheduledTask -TaskName $NamaTugas `
-        -Action $aksi `
-        -Trigger $pemicu `
-        -Settings $setelan `
-        -Description "Menahan WSL agar engine WhatsApp, worker, dan panel Beregam tetap hidup 24 jam." `
-        -RunLevel $tingkat -Force | Out-Null
+    $argumenTugas = @{
+        TaskName = $NamaTugas
+        Action = $aksi
+        Trigger = $pemicu
+        Settings = $setelan
+        Description = "Menahan WSL agar engine WhatsApp, worker, dan panel Beregam tetap hidup 24 jam."
+        Force = $true
+    }
+    if ($null -ne $principal) {
+        $argumenTugas.Principal = $principal
+    }
+    Register-ScheduledTask @argumenTugas | Out-Null
 } catch {
     Write-Output ""
     Write-Output "GAGAL mendaftarkan tugas: $($_.Exception.Message)"
