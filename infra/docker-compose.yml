@@ -75,7 +75,10 @@ services:
       # koneksi masuk, jadi tidak butuh IP publik, port forwarding, atau tunnel.
       WHATSAPP_HOOK_URL: ${PESTA_BASE_URL}/api/beregam/webhook
       WHATSAPP_HOOK_HMAC_KEY: ${BEREGAM_WEBHOOK_HMAC}
-      WHATSAPP_HOOK_EVENTS: ${WAHA_HOOK_EVENTS:-message,session.status}
+      # `message` hanya memuat pesan masuk. `message.any` juga memuat pesan
+      # manual dari HP/perangkat tertaut (fromMe=true), yang dipakai PESTA
+      # untuk menahan bot saat petugas memulai percakapan.
+      WHATSAPP_HOOK_EVENTS: ${WAHA_HOOK_EVENTS:-message.any,session.status}
 
       # Kredensial dashboard dan Swagger.
       #
