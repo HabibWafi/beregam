@@ -3,15 +3,39 @@ import { createServer } from "node:http";
 
 let gagal = false;
 let permintaan = null;
+let statusSesi = "FAILED";
+const aksiSesi = [];
 
 const server = createServer(async (req, res) => {
   const bagian = [];
   for await (const potong of req) bagian.push(potong);
+  const badanMentah = Buffer.concat(bagian).toString("utf8");
   permintaan = {
     method: req.method,
     url: req.url,
-    body: JSON.parse(Buffer.concat(bagian).toString("utf8")),
+    body: badanMentah ? JSON.parse(badanMentah) : null,
   };
+
+  if (req.method === "GET" && req.url === "/api/sessions/default") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: statusSesi }));
+    return;
+  }
+  if (req.method === "POST" && req.url === "/api/sessions/default/stop") {
+    aksiSesi.push("stop");
+    statusSesi = "STOPPED";
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+  if (req.method === "POST" && req.url === "/api/sessions/default/start") {
+    aksiSesi.push("start");
+    statusSesi = "WORKING";
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   if (gagal) {
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end('{"message":"uji gagal"}');
@@ -57,7 +81,12 @@ try {
     gateway.sendList("628111111111@c.us", message),
     /Engine gagal mengirim List Message/
   );
-  console.log("OK - pengiriman List Message dan jalur kegagalannya lulus.");
+
+  assert.equal(await gateway.recoverSessionIfFailed(), "WORKING");
+  assert.deepEqual(aksiSesi, ["stop", "start"]);
+  console.log(
+    "OK - pengiriman List Message, jalur kegagalan, dan pemulihan sesi lulus."
+  );
 } finally {
   await new Promise((selesai) => server.close(selesai));
 }

@@ -144,7 +144,9 @@ async function siklusOutbox(): Promise<void> {
 }
 
 async function siklusHeartbeat(): Promise<void> {
-  const status = await gateway.sessionStatus();
+  // Container yang sehat tidak berarti sesi WhatsApp siap. WAHA kadang
+  // tertinggal FAILED sesudah WSL/container hidup kembali.
+  const status = await gateway.recoverSessionIfFailed();
 
   const balasan = await kirimHeartbeat({
     workerId: config.WORKER_ID,

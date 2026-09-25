@@ -43,6 +43,9 @@ export interface WaGateway {
 
   /** Status sesi, mis. "WORKING". null bila tidak terbaca. */
   sessionStatus(): Promise<string | null>;
+
+  /** Memulihkan sesi yang tertinggal FAILED tanpa mengganggu status lain. */
+  recoverSessionIfFailed(): Promise<string | null>;
 }
 
 export interface ListMessage {
@@ -269,6 +272,45 @@ export class WahaGateway implements WaGateway {
       { diamSaatGagal: true }
     );
     return hasil?.status ?? null;
+  }
+
+  async recoverSessionIfFailed(): Promise<string | null> {
+    const status = await this.sessionStatus();
+    if (status !== "FAILED") return status;
+
+    const jalur = `/api/sessions/${encodeURIComponent(this.sesi)}`;
+    log.warn("sesi WhatsApp FAILED - mencoba pemulihan otomatis");
+
+    // WAHA tidak dapat memulihkan FAILED dengan /start saja. Sesi harus
+    // dihentikan lebih dulu, sama seperti prosedur aman di panel lokal.
+    await this.panggil(`${jalur}/stop`, {
+      method: "POST",
+      diamSaatGagal: true,
+    });
+    await new Promise((selesai) => setTimeout(selesai, 1500));
+    await this.panggil(`${jalur}/start`, {
+      method: "POST",
+      diamSaatGagal: true,
+    });
+
+    // Jangan izinkan loop outbox lanjut saat sesi masih STARTING. Tanpa
+    // penantian ini, pesan pertama setelah boot bisa langsung menjadi
+    // percobaan gagal walaupun pemulihan sedang berlangsung.
+    let sesudah = await this.sessionStatus();
+    for (let i = 0; i < 15 && sesudah === "STARTING"; i += 1) {
+      await new Promise((selesai) => setTimeout(selesai, 1000));
+      sesudah = await this.sessionStatus();
+    }
+
+    if (sesudah === "WORKING") {
+      log.info("sesi WhatsApp pulih otomatis");
+    } else {
+      log.warn("sesi WhatsApp belum pulih setelah restart", {
+        status: sesudah ?? "tidak terbaca",
+      });
+    }
+
+    return sesudah;
   }
 }
 
